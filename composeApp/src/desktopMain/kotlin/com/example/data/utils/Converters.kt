@@ -13,5 +13,10 @@ class Converters {
     fun fromStringList(value: List<String>): String = adapter.toJson(value)
 
     @TypeConverter
-    fun toStringList(value: String): List<String> = adapter.fromJson(value) ?: emptyList()
+    fun toStringList(value: String): List<String> = try {
+        adapter.fromJson(value) ?: emptyList()
+    } catch (e: Exception) {
+        // A corrupt/malformed DB value should degrade to an empty list, not crash.
+        emptyList()
+    }
 }
