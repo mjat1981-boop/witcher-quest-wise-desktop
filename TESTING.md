@@ -20,6 +20,11 @@ Reports land in `composeApp/build/reports/tests/desktopTest/index.html`
 |------|------|----------------|
 | Room type converter | `data/utils/ConvertersTest.kt` | `List<String>` ↔ JSON round-trip, empty lists, order/duplicates, values needing JSON escaping, and graceful fallback on a malformed DB value |
 | Skill-build logic | `ui/QuestViewModelSkillBuildTest.kt` | `setWitcherLevel` clamping (1–100), `adjustSkillPoints` max-level/floor/point-pool rules, `applyRecommendedBuild` allocation + auto-level-bump |
+| Quest filtering | `ui/QuestViewModelFilteredQuestsTest.kt` | `filteredQuests` search (title/description/questgiver/region/type), type filter incl. `SIDE_CONTRACT`, region/status/level-range filters, all three sort orders, filter composition |
+| Alchemy crafting | `ui/QuestViewModelCraftRecipeTest.kt` | `craftRecipe` ingredient sufficiency (incl. category check), quantity subtraction, add-vs-update of the crafted product, and depleted-ingredient removal |
+| DAO / SQL | `data/AppDatabaseDaoTest.kt` | Real in-memory Room DB: quest ordering clause, targeted UPDATEs, `searchMonsters` LIKE, Converters round-trip through an actual column, saddlebag update/delete, and `initializeDefaultQuests` seed/idempotence/backfill |
+
+Shared in-memory DAO fakes for ViewModel tests live in `data/TestDaos.kt`.
 
 ### A cautionary tale
 
@@ -49,12 +54,9 @@ behavior you *think* the code has.
 
 ## Suggested next targets
 
-1. `QuestViewModel.filteredQuests` — the search/type/region/status/level-range
-   filter + sort pipeline. Feed a fake `QuestDao` with a fixed quest list and
-   collect the flow with the test dispatcher advanced.
-2. `QuestRepository.initializeDefaultQuests` — the incremental-upgrade path
-   (inserts only quests whose titles are missing) is easy to regress.
-3. `QuestViewModel.craftRecipe` — ingredient sufficiency checks, quantity
-   subtraction, and add-vs-update of the crafted product.
-4. DAO/SQL layer — in-memory Room database tests for the `@Query` methods,
-   especially `searchMonsters`' LIKE pattern.
+1. `BestiaryViewModel` — search query → repository flow switching.
+2. `GeminiClient` prompt construction — extract and assert the system prompts
+   without hitting the network.
+3. Advisor/Geralt chat state transitions — pending-message insertion and
+   replacement in `sendAdvisorMessage`/`sendGeraltMessage` (needs a seam for
+   `GeminiClient`, which is currently a static object).
