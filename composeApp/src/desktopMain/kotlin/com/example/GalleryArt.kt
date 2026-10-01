@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -208,7 +209,7 @@ fun RegionPaintingStrip(selectedRegion: String, onSelect: (String) -> Unit) {
                 val selected = selectedRegion == place.regionId
                 Column(
                     modifier = Modifier
-                        .width(148.dp)
+                        .width(320.dp)
                         .clickable {
                             onSelect(if (selected) "ALL" else place.regionId)
                         },
@@ -219,14 +220,14 @@ fun RegionPaintingStrip(selectedRegion: String, onSelect: (String) -> Unit) {
                         contentDescription = place.label,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(84.dp)
+                            .aspectRatio(16f / 9f)
                             .clip(RoundedCornerShape(8.dp))
                             .border(
                                 width = if (selected) 2.dp else 1.dp,
                                 color = if (selected) WitcherAmberGold else WitcherBorderColor,
                                 shape = RoundedCornerShape(8.dp)
                             ),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -307,7 +308,7 @@ fun GwentGalleryCard() {
                 shown.forEach { card ->
                     val featured = card.isHeroOrLeader()
                     Column(
-                        modifier = Modifier.width(115.dp),
+                        modifier = Modifier.width(340.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Image(
@@ -315,14 +316,14 @@ fun GwentGalleryCard() {
                             contentDescription = "${card.name} Gwent card",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(160.dp)
+                                .aspectRatio(16f / 9f)
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(
                                     width = if (featured) 2.dp else 1.dp,
                                     color = if (featured) WitcherAmberGold else WitcherBorderColor,
                                     shape = RoundedCornerShape(8.dp)
                                 ),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Fit
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(

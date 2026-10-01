@@ -385,6 +385,35 @@ fun JournalTab(
     val allQuests by viewModel.quests.collectAsStateWithLifecycle()
 
     var currentJournalSubTab by remember { mutableStateOf("QUESTS") }
+    var speakingLineId by remember { mutableStateOf<String?>(null) }
+    val journalVoice = remember { DesktopTts(null) { } }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            journalVoice.stop()
+            journalVoice.shutdown()
+        }
+    }
+
+    fun readJournalLine(lineId: String, text: String) {
+        if (speakingLineId == lineId) {
+            journalVoice.stop()
+            speakingLineId = null
+            return
+        }
+        journalVoice.stop()
+        journalVoice.setSpeechRate(0.78f)
+        journalVoice.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == lineId) speakingLineId = null
+            }
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == lineId) speakingLineId = null
+            }
+        })
+        journalVoice.speak(text, DesktopTts.QUEUE_FLUSH, ttsParams(), lineId)
+        speakingLineId = lineId
+    }
 
     Column(
         modifier = Modifier
@@ -394,7 +423,6 @@ fun JournalTab(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 150.dp) // Constrain header space
                 .padding(bottom = 8.dp)
         ) {
             // Witcher styled Journal Header
@@ -855,7 +883,7 @@ fun JournalTab(
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 state = rememberLazyListState()
             ) {
                 if (mainQuests.isNotEmpty()) {
@@ -867,7 +895,9 @@ fun JournalTab(
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
                             onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
-                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -880,7 +910,9 @@ fun JournalTab(
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
                             onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
-                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -893,7 +925,9 @@ fun JournalTab(
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
                             onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
-                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -1056,13 +1090,33 @@ fun QuestLevelBadge(
 }
 
 @Composable
+private fun ReadAloudControl(
+    lineId: String,
+    spoken: String,
+    speakingLineId: String?,
+    onReadAloud: (String, String) -> Unit
+) {
+    Text(
+        text = "Read aloud",
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = if (speakingLineId == lineId) WitcherAmberGold else WitcherWhiteText,
+        modifier = Modifier
+            .padding(top = 6.dp)
+            .clickable { onReadAloud(lineId, spoken) }
+    )
+}
+
+@Composable
 fun QuestListItem(
     quest: Quest,
     onClick: () -> Unit,
     onConsultGeralt: (() -> Unit)? = null,
     onConsultAdvisor: (() -> Unit)? = null,
     onToggleStatus: (Boolean) -> Unit,
-    onToggleTracked: () -> Unit = {}
+    onToggleTracked: () -> Unit = {},
+    speakingLineId: String? = null,
+    onReadAloud: (String, String) -> Unit = { _, _ -> }
 ) {
     val isCompleted = quest.status == "COMPLETED"
 
@@ -1244,6 +1298,12 @@ fun QuestListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                ReadAloudControl(
+                    lineId = "quest-${quest.id}",
+                    spoken = questNoticeSpokenLine(quest.title, formatLabel(quest.region), quest.description),
+                    speakingLineId = speakingLineId,
+                    onReadAloud = onReadAloud
+                )
 
                 var isExpanded by remember { mutableStateOf(false) }
                 val tree = remember(quest.title) { com.example.data.QuestDecisionTree.getTreeForQuest(quest.title) }
@@ -1331,6 +1391,12 @@ fun QuestListItem(
                                         color = WitcherMutedText,
                                         fontSize = 10.sp,
                                         lineHeight = 13.sp
+                                    )
+                                    ReadAloudControl(
+                                        lineId = "path-${quest.id}-${path.id}",
+                                        spoken = destinyChoiceSpokenLine(path.choiceName, path.longTermNode.description),
+                                        speakingLineId = speakingLineId,
+                                        onReadAloud = onReadAloud
                                     )
                                 }
                             }
@@ -1539,8 +1605,12 @@ fun BestiaryTab(viewModel: QuestViewModel, section: String = "MONSTERS") {
                     }
                 })
 
-                val weaknessesStr = monster.weaknesses.joinToString(", ")
-                val textToSpeak = "${monster.name}. Classified as ${monster.category}. Vulnerabilities: $weaknessesStr. Description: ${monster.description}. Tactical Guide: ${monster.combatGuide}"
+                val textToSpeak = beastSpokenLine(
+                    name = monster.name,
+                    kind = monster.category,
+                    weaknesses = monster.weaknesses,
+                    howToFight = monster.combatGuide
+                )
                 val params = ttsParams().apply {
                     putString(DesktopTts.Engine.KEY_PARAM_UTTERANCE_ID, monster.name)
                 }
@@ -1617,7 +1687,7 @@ fun BestiaryTab(viewModel: QuestViewModel, section: String = "MONSTERS") {
 
             // Monsters list
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 items(monsters) { monster ->
@@ -1711,7 +1781,7 @@ fun BestiaryTab(viewModel: QuestViewModel, section: String = "MONSTERS") {
                 }
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(alchemyRecipes) { recipe ->
@@ -1742,45 +1812,40 @@ fun MonsterCardItem(
         colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Row(modifier = Modifier.padding(10.dp).height(IntrinsicSize.Min)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             val beastImageRes = beastDrawable(monster.name)
             if (beastImageRes != null) {
                 Image(
                     painter = painterResource(beastImageRes),
                     contentDescription = monster.name,
                     modifier = Modifier
-                        .width(240.dp)
-                        .fillMaxHeight()
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Fit
                 )
+                Spacer(modifier = Modifier.height(16.dp))
             }
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             // Header: Name and Category badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = monster.name,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = WitcherWhiteText
                     )
-                    IconButton(
-                        onClick = onSpeakClick,
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Text(
-                            text = if (isSpeaking) "🔇" else "🔊",
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(
+                        text = "Read aloud",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSpeaking) WitcherAmberGold else WitcherWhiteText,
+                        modifier = Modifier.clickable(onClick = onSpeakClick)
+                    )
                 }
 
                 Surface(
@@ -1879,7 +1944,6 @@ fun MonsterCardItem(
                     color = WitcherWhiteText,
                     letterSpacing = 1.sp
                 )
-            }
             }
         }
     }
