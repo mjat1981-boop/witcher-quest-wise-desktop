@@ -57,6 +57,9 @@ internal class InMemoryQuestDao(
     override suspend fun getQuestCount(): Int = state.value.size
 
     override suspend fun getAllQuestTitlesSnapshot(): List<String> = state.value.map { it.title }
+
+    override suspend fun updateQuestRegionByTitle(title: String, region: String) =
+        state.update { l -> l.map { if (it.title == title) it.copy(region = region) else it } }
 }
 
 internal class InMemorySaddlebagDao(

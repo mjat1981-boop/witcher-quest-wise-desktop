@@ -37,4 +37,7 @@ interface QuestDao {
 
     @Query("SELECT title FROM quests")
     suspend fun getAllQuestTitlesSnapshot(): List<String>
+
+    @Query("UPDATE quests SET region = :region WHERE title = :title")
+    suspend fun updateQuestRegionByTitle(title: String, region: String)
 }

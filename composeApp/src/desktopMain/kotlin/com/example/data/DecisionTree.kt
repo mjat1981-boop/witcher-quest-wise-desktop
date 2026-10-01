@@ -38,11 +38,11 @@ data class QuestDecisionTree(
 ) {
     companion object {
         fun getTreeForQuest(title: String): QuestDecisionTree? {
-            return registry.find { it.questTitle.equals(title, ignoreCase = true) }
+            return (registry + choiceDialogues()).find { it.questTitle.equals(title, ignoreCase = true) }
         }
 
         fun getAllTrees(): List<QuestDecisionTree> {
-            return registry
+            return registry + choiceDialogues()
         }
 
         private val registry = listOf(

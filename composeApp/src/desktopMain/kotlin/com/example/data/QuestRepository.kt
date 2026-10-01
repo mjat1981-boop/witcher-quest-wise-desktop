@@ -23,6 +23,10 @@ class QuestRepository(
                 questDao.insertQuests(missingQuests)
             }
         }
+        // Keep seeded regions, so Hearts of Stone moves to Oxenfurt without touching status.
+        for (quest in preloaded) {
+            questDao.updateQuestRegionByTitle(quest.title, quest.region)
+        }
         
         val catSchoolDiagram = SaddlebagItem(
             name = "Cat School Steel Sword Diagram",

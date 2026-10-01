@@ -272,6 +272,7 @@ private class FakeQuestDao : QuestDao {
     override suspend fun deleteQuest(quest: Quest) {}
     override suspend fun getQuestCount(): Int = 0
     override suspend fun getAllQuestTitlesSnapshot(): List<String> = emptyList()
+    override suspend fun updateQuestRegionByTitle(title: String, region: String) {}
 }
 
 private class FakeSaddlebagItemDao : SaddlebagItemDao {

@@ -9,6 +9,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -144,5 +146,28 @@ class AppDatabaseDaoTest {
         repo.initializeDefaultQuests()
         assertEquals(preloadedCount, db.questDao().getQuestCount())
         assertTrue(db.questDao().getAllQuestTitlesSnapshot().contains(victim.title))
+    }
+
+    @Test
+    fun everyPaintedRegionHasQuestsAndHeartsOfStoneIsOxenfurt() {
+        val quests = AppDatabase.getPreloadedQuests()
+        val painted = listOf(
+            "WHITE_ORCHARD", "VELEN", "NOVIGRAD", "SKELLIGE",
+            "KAER_MORHEN", "TOUSSAINT", "HEART_OF_STONE"
+        )
+        for (region in painted) {
+            assertTrue(quests.any { it.region == region }, region)
+        }
+        assertEquals(
+            "HEART_OF_STONE",
+            quests.first { it.title == "Evil's Soft First Touches" }.region
+        )
+    }
+
+    @Test
+    fun choiceQuestHasDialogueAndPlainTreasureDoesNot() {
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Family Matters"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Whatsoever a Man Soweth..."))
+        assertNull(QuestDecisionTree.getTreeForQuest("Dirty Funds"))
     }
 }
