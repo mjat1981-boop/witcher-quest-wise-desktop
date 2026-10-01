@@ -20,6 +20,9 @@ interface QuestDao {
     @Query("UPDATE quests SET status = :status WHERE id = :id")
     suspend fun updateQuestStatus(id: Int, status: String)
 
+    @Query("UPDATE quests SET tracked = :tracked WHERE id = :id")
+    suspend fun updateQuestTracked(id: Int, tracked: Boolean)
+
     @Query("UPDATE quests SET notes = :notes WHERE id = :id")
     suspend fun updateQuestNotes(id: Int, notes: String)
 
@@ -34,4 +37,7 @@ interface QuestDao {
 
     @Query("SELECT title FROM quests")
     suspend fun getAllQuestTitlesSnapshot(): List<String>
+
+    @Query("UPDATE quests SET region = :region WHERE title = :title")
+    suspend fun updateQuestRegionByTitle(title: String, region: String)
 }

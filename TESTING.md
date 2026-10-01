@@ -19,7 +19,7 @@ Reports land in `composeApp/build/reports/tests/desktopTest/index.html`
 | Area | File | What it guards |
 |------|------|----------------|
 | Room type converter | `data/utils/ConvertersTest.kt` | `List<String>` ↔ JSON round-trip, empty lists, order/duplicates, values needing JSON escaping, and graceful fallback on a malformed DB value |
-| Skill-build logic | `ui/QuestViewModelSkillBuildTest.kt` | `setWitcherLevel` clamping (1–100), `adjustSkillPoints` max-level/floor/point-pool rules, `applyRecommendedBuild` allocation + auto-level-bump |
+| Skill-build logic | `ui/QuestViewModelSkillBuildTest.kt` | `setWitcherLevel` clamping (1–100), `adjustSkillPoints` max-level/floor/point-pool rules, Remastered prerequisite gates and three-rank general skills, `applyRecommendedBuild` allocation + auto-level-bump, Yoana/Hattori reforge (appearance only; stats and dye stay) |
 | Quest filtering | `ui/QuestViewModelFilteredQuestsTest.kt` | `filteredQuests` search (title/description/questgiver/region/type), type filter incl. `SIDE_CONTRACT`, region/status/level-range filters, all three sort orders, filter composition |
 | Alchemy crafting | `ui/QuestViewModelCraftRecipeTest.kt` | `craftRecipe` ingredient sufficiency (incl. category check), quantity subtraction, add-vs-update of the crafted product, and depleted-ingredient removal |
 | DAO / SQL | `data/AppDatabaseDaoTest.kt` | Real in-memory Room DB: quest ordering clause, targeted UPDATEs, `searchMonsters` LIKE, Converters round-trip through an actual column, saddlebag update/delete, and `initializeDefaultQuests` seed/idempotence/backfill |

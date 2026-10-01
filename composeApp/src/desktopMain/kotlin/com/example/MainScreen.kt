@@ -58,6 +58,8 @@ import com.example.data.Quest
 import com.example.ui.ChatMessage
 import com.example.ui.QuestViewModel
 import com.example.ui.WitcherSkill
+import com.example.ui.schoolLookCatalog
+import com.example.ui.unlockedSchoolIds
 import com.example.ui.DecisionTreeVisualizer
 import com.example.ui.DecisionTreeExplorer
 import com.example.ui.theme.*
@@ -80,12 +82,6 @@ fun MainScreen(viewModel: QuestViewModel) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = WitcherDarkBackground,
-        bottomBar = {
-            WitcherBottomNavBar(
-                currentTab = currentTab,
-                onTabSelected = { viewModel.setTab(it) }
-            )
-        },
         floatingActionButton = {
             if (currentTab == "JOURNAL") {
                 FloatingActionButton(
@@ -107,6 +103,16 @@ fun MainScreen(viewModel: QuestViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+        ) {
+        GlossaryRail(
+            currentTab = currentTab,
+            onSelect = { viewModel.setTab(it) },
+            modifier = Modifier.align(Alignment.CenterStart)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 200.dp)
                 .background(
                     brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                         colors = listOf(
@@ -121,10 +127,12 @@ fun MainScreen(viewModel: QuestViewModel) {
             Crossfade(targetState = currentTab, label = "TabTransition") { tab ->
                 when (tab) {
                     "JOURNAL" -> JournalTab(viewModel, filteredQuests)
-                    "BESTIARY" -> BestiaryTab(viewModel)
-                    "CHAT" -> ChatTab(viewModel)
-                    "ADVISOR" -> AdvisorTab(viewModel)
-                    "PROFILE" -> ProfileTab(viewModel, quests)
+                    "BEASTS" -> BestiaryTab(viewModel, section = "MONSTERS")
+                    "ALCHEMY" -> BestiaryTab(viewModel, section = "ALCHEMY")
+                    "GWENT" -> GwentPlace()
+                    "GEAR" -> GearPlace(viewModel)
+                    "COUNSEL" -> CounselPlace(viewModel)
+                    else -> JournalTab(viewModel, filteredQuests)
                 }
             }
 
@@ -146,7 +154,6 @@ fun MainScreen(viewModel: QuestViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("👜", fontSize = 16.sp)
                     Text("Saddlebags", color = WitcherAmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -210,6 +217,69 @@ fun MainScreen(viewModel: QuestViewModel) {
                     }
                 )
             }
+        }
+        }
+    }
+}
+
+@Composable
+fun GwentPlace() {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        PlaceTitle("Gwent")
+        GwentGalleryCard()
+    }
+}
+
+@Composable
+fun GearPlace(viewModel: QuestViewModel) {
+    val level by viewModel.witcherLevel.collectAsStateWithLifecycle()
+    val skills by viewModel.witcherSkills.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        PlaceTitle("Gear")
+        WitcherAbilityTree(viewModel = viewModel, skills = skills, level = level)
+        Spacer(modifier = Modifier.height(14.dp))
+        EquipmentReforgeCard(viewModel = viewModel)
+    }
+}
+
+@Composable
+fun CounselPlace(viewModel: QuestViewModel) {
+    val voice by viewModel.counselVoice.collectAsStateWithLifecycle()
+    val advisor by viewModel.selectedAdvisor.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            PlaceTitle("Counsel")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Geralt", "Vesemir", "Yennefer", "Jaskier").forEach { name ->
+                    val selected = if (name == "Geralt") voice == "GERALT" else voice == "ADVISOR" && advisor == name
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (name == "Geralt") viewModel.setCounselVoice("GERALT")
+                                else {
+                                    if (advisor != name) viewModel.setAdvisor(name)
+                                    viewModel.setCounselVoice("ADVISOR")
+                                }
+                            }
+                            .border(1.dp, if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(counselPortrait(name)),
+                            contentDescription = name,
+                            modifier = Modifier.size(28.dp).clip(RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(name, color = if (selected) WitcherAmberGold else WitcherMutedText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            if (voice == "GERALT") ChatTab(viewModel) else AdvisorTab(viewModel)
         }
     }
 }
@@ -315,6 +385,35 @@ fun JournalTab(
     val allQuests by viewModel.quests.collectAsStateWithLifecycle()
 
     var currentJournalSubTab by remember { mutableStateOf("QUESTS") }
+    var speakingLineId by remember { mutableStateOf<String?>(null) }
+    val journalVoice = remember { DesktopTts(null) { } }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            journalVoice.stop()
+            journalVoice.shutdown()
+        }
+    }
+
+    fun readJournalLine(lineId: String, text: String) {
+        if (speakingLineId == lineId) {
+            journalVoice.stop()
+            speakingLineId = null
+            return
+        }
+        journalVoice.stop()
+        journalVoice.setSpeechRate(0.78f)
+        journalVoice.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onDone(utteranceId: String?) {
+                if (utteranceId == lineId) speakingLineId = null
+            }
+            override fun onError(utteranceId: String?) {
+                if (utteranceId == lineId) speakingLineId = null
+            }
+        })
+        journalVoice.speak(text, DesktopTts.QUEUE_FLUSH, ttsParams(), lineId)
+        speakingLineId = lineId
+    }
 
     Column(
         modifier = Modifier
@@ -324,20 +423,10 @@ fun JournalTab(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 150.dp) // Constrain header space
                 .padding(bottom = 8.dp)
         ) {
             // Witcher styled Journal Header
-            Text(
-                text = "Matt's Witcher guide".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherRedPrimary,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
+            PlaceTitle("Journal")
             Text(
                 text = "Manage your contracts, side pathways, and main destiny highlights.",
                 style = MaterialTheme.typography.bodySmall,
@@ -355,8 +444,8 @@ fun JournalTab(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val tabs = listOf(
-                    Pair("QUESTS", "📜 Quest Log"),
-                    Pair("DECISIONS", "⚖️ Destiny Branches")
+                    Pair("QUESTS", "Quest Log"),
+                    Pair("DECISIONS", "Destiny")
                 )
                 tabs.forEach { (tabId, label) ->
                     val isSelected = currentJournalSubTab == tabId
@@ -383,6 +472,10 @@ fun JournalTab(
         }
 
         if (currentJournalSubTab == "QUESTS") {
+            RegionPaintingStrip(
+                selectedRegion = regionFilter,
+                onSelect = { viewModel.setRegionFilter(it) }
+            )
             // Search Bar
         OutlinedTextField(
             value = searchQuery,
@@ -420,7 +513,7 @@ fun JournalTab(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "⚔️ Filters & Navigation",
+                    text = "Filters",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = WitcherAmberGold
@@ -670,10 +763,10 @@ fun JournalTab(
                 ) {
                     val levelRanges = listOf(
                         Pair("ALL", "All Levels"),
-                        Pair("1_5", "🟢 Novice (1-5)"),
-                        Pair("6_15", "⚔️ Journeyman (6-15)"),
-                        Pair("16_25", "🛡️ Master (16-25)"),
-                        Pair("26_UP", "💀 Legendary (26+)")
+                        Pair("1_5", "Novice (1-5)"),
+                        Pair("6_15", "Journeyman (6-15)"),
+                        Pair("16_25", "Master (16-25)"),
+                        Pair("26_UP", "Legendary (26+)")
                     )
                     levelRanges.forEach { (rangeVal, labelText) ->
                         FilterChipCustom(
@@ -782,13 +875,15 @@ fun JournalTab(
             }
         } else {
             val groupedQuests = quests.groupBy { it.type }
-            val mainQuests = groupedQuests["MAIN"] ?: emptyList()
-            val sideContracts = (groupedQuests["SIDE"] ?: emptyList()) + (groupedQuests["CONTRACT"] ?: emptyList())
-            val treasureQuests = groupedQuests["TREASURE"] ?: emptyList()
+            val mainQuests = (groupedQuests["MAIN"] ?: emptyList()).sortedByDescending { it.tracked }
+            val sideContracts = (
+                (groupedQuests["SIDE"] ?: emptyList()) + (groupedQuests["CONTRACT"] ?: emptyList())
+            ).sortedByDescending { it.tracked }
+            val treasureQuests = (groupedQuests["TREASURE"] ?: emptyList()).sortedByDescending { it.tracked }
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 state = rememberLazyListState()
             ) {
                 if (mainQuests.isNotEmpty()) {
@@ -799,7 +894,10 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -811,7 +909,10 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -823,7 +924,10 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) },
+                            speakingLineId = speakingLineId,
+                            onReadAloud = { lineId, text -> readJournalLine(lineId, text) }
                         )
                     }
                 }
@@ -986,12 +1090,33 @@ fun QuestLevelBadge(
 }
 
 @Composable
+private fun ReadAloudControl(
+    lineId: String,
+    spoken: String,
+    speakingLineId: String?,
+    onReadAloud: (String, String) -> Unit
+) {
+    Text(
+        text = "Read aloud",
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = if (speakingLineId == lineId) WitcherAmberGold else WitcherWhiteText,
+        modifier = Modifier
+            .padding(top = 6.dp)
+            .clickable { onReadAloud(lineId, spoken) }
+    )
+}
+
+@Composable
 fun QuestListItem(
     quest: Quest,
     onClick: () -> Unit,
     onConsultGeralt: (() -> Unit)? = null,
     onConsultAdvisor: (() -> Unit)? = null,
-    onToggleStatus: (Boolean) -> Unit
+    onToggleStatus: (Boolean) -> Unit,
+    onToggleTracked: () -> Unit = {},
+    speakingLineId: String? = null,
+    onReadAloud: (String, String) -> Unit = { _, _ -> }
 ) {
     val isCompleted = quest.status == "COMPLETED"
 
@@ -1014,11 +1139,12 @@ fun QuestListItem(
 
     // 3. Smooth animated border color matching the Witcher success state
     val animatedBorderColor by animateColorAsState(
-        targetValue = when (quest.status) {
-            "NOT_STARTED" -> WitcherBorderColor
-            "IN_PROGRESS" -> WitcherInProgress.copy(alpha = 0.7f)
-            "COMPLETED" -> WitcherSuccess.copy(alpha = 0.8f)
-            "FAILED" -> WitcherFailed.copy(alpha = 0.7f)
+        targetValue = when {
+            quest.tracked -> WitcherAmberGold
+            quest.status == "NOT_STARTED" -> WitcherBorderColor
+            quest.status == "IN_PROGRESS" -> WitcherInProgress.copy(alpha = 0.7f)
+            quest.status == "COMPLETED" -> WitcherSuccess.copy(alpha = 0.8f)
+            quest.status == "FAILED" -> WitcherFailed.copy(alpha = 0.7f)
             else -> WitcherBorderColor
         },
         animationSpec = tween(durationMillis = 350),
@@ -1079,10 +1205,10 @@ fun QuestListItem(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val stampText = when (quest.type) {
-                        "MAIN" -> "⚔️ Main"
-                        "SIDE" -> "📜 Side"
-                        "CONTRACT" -> "🐺 Contract"
-                        "TREASURE" -> "💎 Hunt"
+                        "MAIN" -> "Main"
+                        "SIDE" -> "Side"
+                        "CONTRACT" -> "Contract"
+                        "TREASURE" -> "Hunt"
                         else -> "Quest"
                     }
                     Text(
@@ -1102,6 +1228,19 @@ fun QuestListItem(
                         color = WitcherMutedText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (quest.tracked) "Tracked" else "Untracked",
+                        fontSize = 10.sp,
+                        fontWeight = if (quest.tracked) FontWeight.Bold else FontWeight.Normal,
+                        color = if (quest.tracked) WitcherAmberGold else WitcherMutedText
+                    )
+                    Text(
+                        text = if (quest.tracked) "Untrack" else "Track",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WitcherAmberGold,
+                        modifier = Modifier.clickable { onToggleTracked() }
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     val color = when(quest.priority) {
@@ -1158,6 +1297,12 @@ fun QuestListItem(
                     color = WitcherMutedText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                ReadAloudControl(
+                    lineId = "quest-${quest.id}",
+                    spoken = questNoticeSpokenLine(quest.title, formatLabel(quest.region), quest.description),
+                    speakingLineId = speakingLineId,
+                    onReadAloud = onReadAloud
                 )
 
                 var isExpanded by remember { mutableStateOf(false) }
@@ -1246,6 +1391,12 @@ fun QuestListItem(
                                         color = WitcherMutedText,
                                         fontSize = 10.sp,
                                         lineHeight = 13.sp
+                                    )
+                                    ReadAloudControl(
+                                        lineId = "path-${quest.id}-${path.id}",
+                                        spoken = destinyChoiceSpokenLine(path.choiceName, path.longTermNode.description),
+                                        speakingLineId = speakingLineId,
+                                        onReadAloud = onReadAloud
                                     )
                                 }
                             }
@@ -1404,7 +1555,7 @@ fun QuestListItem(
 // BESTIARY TAB
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun BestiaryTab(viewModel: QuestViewModel) {
+fun BestiaryTab(viewModel: QuestViewModel, section: String = "MONSTERS") {
     val search by viewModel.bestiarySearch.collectAsStateWithLifecycle()
     val category by viewModel.bestiaryCategory.collectAsStateWithLifecycle()
     val monsters by viewModel.monsters.collectAsStateWithLifecycle()
@@ -1414,7 +1565,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
     val alchemyRecipes by viewModel.alchemyRecipes.collectAsStateWithLifecycle()
     val saddlebagItems by viewModel.saddlebagItems.collectAsStateWithLifecycle()
 
-    var activeSubTab by remember { mutableStateOf("MONSTERS") } // "MONSTERS", "ALCHEMY"
+    var activeSubTab by remember { mutableStateOf(section) }
 
     val context: Any? = null
     var tts by remember { mutableStateOf<DesktopTts?>(null) }
@@ -1454,8 +1605,12 @@ fun BestiaryTab(viewModel: QuestViewModel) {
                     }
                 })
 
-                val weaknessesStr = monster.weaknesses.joinToString(", ")
-                val textToSpeak = "${monster.name}. Classified as ${monster.category}. Vulnerabilities: $weaknessesStr. Description: ${monster.description}. Tactical Guide: ${monster.combatGuide}"
+                val textToSpeak = beastSpokenLine(
+                    name = monster.name,
+                    kind = monster.category,
+                    weaknesses = monster.weaknesses,
+                    howToFight = monster.combatGuide
+                )
                 val params = ttsParams().apply {
                     putString(DesktopTts.Engine.KEY_PARAM_UTTERANCE_ID, monster.name)
                 }
@@ -1470,55 +1625,10 @@ fun BestiaryTab(viewModel: QuestViewModel) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Top Sub-Tab Switcher
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
-                .background(WitcherDarkSurface, RoundedCornerShape(8.dp))
-                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            val subTabs = listOf(
-                Pair("MONSTERS", "🐺 Beasts & Monsters"),
-                Pair("ALCHEMY", "🧪 Alchemy Recipes")
-            )
-            subTabs.forEach { (tabId, label) ->
-                val isSelected = activeSubTab == tabId
-                Surface(
-                    color = if (isSelected) WitcherRedPrimary else Color.Transparent,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { activeSubTab = tabId }
-                ) {
-                    Text(
-                        text = label,
-                        color = if (isSelected) WitcherDarkBackground else WitcherWhiteText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            }
-        }
-
         if (activeSubTab == "MONSTERS") {
+            PlaceTitle("Beasts")
             Text(
-                text = "Witcher Bestiary".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherRedPrimary,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-            Text(
-                text = "Consult vulnerabilities, potion remedies, and combat formulas before engaging target monsters.",
+                    text = "Consult vulnerabilities and combat notes before engaging a monster.",
                 style = MaterialTheme.typography.bodySmall,
                 color = WitcherMutedText,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -1577,7 +1687,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
 
             // Monsters list
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.weight(1f)
             ) {
                 items(monsters) { monster ->
@@ -1590,17 +1700,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
                 }
             }
         } else {
-            // ALCHEMY TAB ACTIVE
-            Text(
-                text = "Alchemy Formulas".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherAmberGold,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+            PlaceTitle("Alchemy")
             Text(
                 text = "Synthesize deadly oils, restorative potions, and toxicity-boosting decoctions using material assets.",
                 style = MaterialTheme.typography.bodySmall,
@@ -1681,7 +1781,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
                 }
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(alchemyRecipes) { recipe ->
@@ -1712,32 +1812,40 @@ fun MonsterCardItem(
         colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val beastImageRes = beastDrawable(monster.name)
+            if (beastImageRes != null) {
+                Image(
+                    painter = painterResource(beastImageRes),
+                    contentDescription = monster.name,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             // Header: Name and Category badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = monster.name,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = WitcherWhiteText
                     )
-                    IconButton(
-                        onClick = onSpeakClick,
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Text(
-                            text = if (isSpeaking) "🔇" else "🔊",
-                            fontSize = 13.sp
-                        )
-                    }
+                    Text(
+                        text = "Read aloud",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSpeaking) WitcherAmberGold else WitcherWhiteText,
+                        modifier = Modifier.clickable(onClick = onSpeakClick)
+                    )
                 }
 
                 Surface(
@@ -1766,47 +1874,9 @@ fun MonsterCardItem(
                 modifier = Modifier.padding(bottom = 10.dp)
             )
 
-            // Dynamic Illustrations for special beasts
-            val beastImageRes = when (monster.name) {
-                "Leshen" -> Res.drawable.img_beast_leshen
-                "Werewolf" -> Res.drawable.img_beast_werewolf
-                "Noonwraith" -> Res.drawable.img_beast_noonwraith
-                "Nightwraith" -> Res.drawable.img_beast_nightwraith
-                "Royal Griffin" -> Res.drawable.img_beast_griffin
-                "Fiend" -> Res.drawable.img_beast_fiend
-                "Katakan" -> Res.drawable.img_beast_katakan
-                "Ghoul" -> Res.drawable.img_beast_ghoul
-                "Drowner" -> Res.drawable.img_beast_drowner
-                "Nekker" -> Res.drawable.img_beast_nekker
-                "Noonshade Forktail" -> Res.drawable.img_beast_forktail
-                "Foglet" -> Res.drawable.img_beast_foglet
-                "Grave Hag" -> Res.drawable.img_beast_grave_hag
-                "Wyvern" -> Res.drawable.img_beast_wyvern
-                "Chort" -> Res.drawable.img_beast_chort
-                "Basilisk" -> Res.drawable.img_beast_basilisk
-                "Cockatrice" -> Res.drawable.img_beast_cockatrice
-                "Water Hag" -> Res.drawable.img_beast_water_hag
-                "Higher Vampire" -> Res.drawable.img_beast_higher_vampire
-                "Toad Prince" -> Res.drawable.img_beast_toad_prince
-                else -> null
-            }
-            if (beastImageRes != null) {
-                Image(
-                    painter = painterResource(beastImageRes),
-                    contentDescription = monster.name + " portrait sketch",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(185.dp)
-                        .padding(bottom = 12.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
             // Weakness tags
             Text(
-                text = "⚔️ Vulnerabilities".uppercase(),
+                text = "Vulnerabilities".uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = WitcherAmberGold,
@@ -1832,7 +1902,7 @@ fun MonsterCardItem(
                             }
                     ) {
                         Text(
-                            text = "⚡ $weakness",
+                            text = weakness,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = WitcherAmberGold,
@@ -1844,7 +1914,7 @@ fun MonsterCardItem(
 
             // Prep Combat strategy guide
             Text(
-                text = "🛡️ Tactician's Council".uppercase(),
+                text = "How to fight".uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = WitcherWhiteText,
@@ -1868,7 +1938,7 @@ fun MonsterCardItem(
                     .heightIn(min = 48.dp) // Touch target minimum 48dp
             ) {
                 Text(
-                    text = "👴 Consult Elder Vesemir".uppercase(),
+                    text = "Consult Vesemir".uppercase(),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = WitcherWhiteText,
@@ -1904,15 +1974,15 @@ fun AlchemyRecipeCardItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(alchemyCategoryImage(recipe.category)),
+                        contentDescription = recipe.category,
                         modifier = Modifier
                             .size(36.dp)
-                            .background(WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, WitcherAmberGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = recipe.icon, fontSize = 20.sp)
-                    }
+                        contentScale = ContentScale.Crop
+                    )
                     Text(
                         text = recipe.name,
                         fontSize = 16.sp,
@@ -2010,23 +2080,29 @@ fun AlchemyRecipeCardItem(
                         border = BorderStroke(1.dp, strokeColor),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(text = req.icon, fontSize = 11.sp)
-                            Text(
-                                text = "${req.name} (${ownedQty}/${req.quantity})",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (hasEnough) WitcherWhiteText else WitcherMutedText
-                            )
-                            if (hasEnough) {
-                                Text("✓", color = WitcherSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            } else {
-                                Text("✗", color = WitcherFailed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).widthIn(max = 240.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(text = req.icon, fontSize = 11.sp)
+                                Text(
+                                    text = "${req.name} (${ownedQty}/${req.quantity})",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (hasEnough) WitcherWhiteText else WitcherMutedText
+                                )
+                                if (hasEnough) {
+                                    Text("✓", color = WitcherSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("✗", color = WitcherFailed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
+                            Text(
+                                text = "Found: ${req.foundAt}",
+                                fontSize = 9.sp,
+                                color = WitcherMutedText
+                            )
                         }
                     }
                 }
@@ -2649,9 +2725,9 @@ fun AdvisorTab(viewModel: QuestViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val advisors = listOf(
-                    Triple("Vesemir", "👴 Vesemir", "Old Master"),
-                    Triple("Yennefer", "🔮 Yennefer", "Sorceress"),
-                    Triple("Jaskier", "🪕 Jaskier", "Glam Bard")
+                    Triple("Vesemir", "Vesemir", "Old Master"),
+                    Triple("Yennefer", "Yennefer", "Sorceress"),
+                    Triple("Jaskier", "Jaskier", "Glam Bard")
                 )
                 
                 advisors.forEach { (id, label, subtitle) ->
@@ -3273,6 +3349,10 @@ fun ProfileTab(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
+        RemasteredNotesCard()
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // Geralt's Stat Slate Card
         Card(
             modifier = Modifier
@@ -3795,6 +3875,10 @@ fun ProfileTab(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        EquipmentReforgeCard(viewModel = viewModel)
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // Personal witcher journal secrets notepad
         Card(
             modifier = Modifier
@@ -3850,573 +3934,8 @@ fun ProfileTab(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Gwent Cards & Collection Gallery
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, WitcherDarkSurfaceVariant, RoundedCornerShape(12.dp)),
-            colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "🃏 Gwent Deck & Cards",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = WitcherAmberGold
-                    )
-                    Surface(
-                        color = WitcherRedPrimary.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, WitcherRedPrimary)
-                    ) {
-                        Text(
-                            text = "Northern Realms",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-                Text(
-                    text = "Behold your active combat deck, featuring legendary hero cards collected along your adventure.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WitcherMutedText,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+        GwentGalleryCard()
 
-                // Grid/Row of cards (Horizontally Scrollable)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Card 1: Gwent Back
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_back),
-                            contentDescription = "Gwent Card Back",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Card Back",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherWhiteText
-                        )
-                        Text(
-                            text = "Wolf Medallion",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 2: Geralt
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_geralt),
-                            contentDescription = "Geralt of Rivia Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Geralt of Rivia",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (15)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 3: Ciri
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_ciri),
-                            contentDescription = "Ciri Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Ciri of Cintra",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (15)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card Jaskier: Grand Minstrel
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_jaskier),
-                            contentDescription = "Jaskier Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Dandelion / Jaskier",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Minstrel Card (2)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 4: Vesemir
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_vesemir),
-                            contentDescription = "Vesemir Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Vesemir",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (6)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 5: Yennefer
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_yennefer),
-                            contentDescription = "Yennefer Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Yennefer",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (7)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 6: Triss
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_triss),
-                            contentDescription = "Triss Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Triss Merigold",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (7)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 7: Regis (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_regis),
-                            contentDescription = "Regis Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Emiel Regis",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (10)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 8: Zoltan Chivay (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_zoltan),
-                            contentDescription = "Zoltan Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Zoltan Chivay",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherWhiteText
-                        )
-                        Text(
-                            text = "Scout Card (5)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 9: Roach (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_roach),
-                            contentDescription = "Roach Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Roach",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherWhiteText
-                        )
-                        Text(
-                            text = "Unit Card (3)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 10: Letho of Gulet (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_letho),
-                            contentDescription = "Letho Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Letho of Gulet",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (10)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 11: Eredin Gwent Card (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_eredin),
-                            contentDescription = "Eredin Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Eredin",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Leader Card (10)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 12: Emhyr Gwent Card (Newly Added)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_emhyr),
-                            contentDescription = "Emhyr Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Emhyr var Emreis",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Leader Card (10)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 13: Lambert Gwent Card (Newly Generated & Added!)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_lambert),
-                            contentDescription = "Lambert Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Lambert",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (15)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 14: Eskel Gwent Card (Newly Generated & Added!)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_eskel),
-                            contentDescription = "Eskel Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Eskel",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Hero Card (11)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 15: Gaunter O'Dimm Gwent Card (Newly Generated & Added!)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_gaunter),
-                            contentDescription = "Gaunter Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(2.dp, WitcherAmberGold, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Gaunter O'Dimm",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherAmberGold
-                        )
-                        Text(
-                            text = "Leader Card (12)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-
-                    // Card 16: Bloody Baron Gwent Card (Newly Generated & Added!)
-                    Column(
-                        modifier = Modifier.width(115.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(Res.drawable.img_gwent_baron),
-                            contentDescription = "Bloody Baron Gwent Card",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Bloody Baron",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = WitcherWhiteText
-                        )
-                        Text(
-                            text = "Unit Card (6)",
-                            fontSize = 10.sp,
-                            color = WitcherMutedText
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-                // Quick deck stats
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Deck Size", fontSize = 10.sp, color = WitcherMutedText)
-                        Text("36 / 45", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WitcherWhiteText)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Hero & Leaders", fontSize = 10.sp, color = WitcherMutedText)
-                        Text("11", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WitcherAmberGold)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Total Power", fontSize = 10.sp, color = WitcherMutedText)
-                        Text("212 PTS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WitcherWhiteText)
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(14.dp))
 
@@ -4958,30 +4477,7 @@ fun QuestDetailsDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val beastImageRes = when (matchedMonster) {
-                                    "Leshen" -> Res.drawable.img_beast_leshen
-                                    "Werewolf" -> Res.drawable.img_beast_werewolf
-                                    "Noonwraith" -> Res.drawable.img_beast_noonwraith
-                                    "Nightwraith" -> Res.drawable.img_beast_nightwraith
-                                    "Royal Griffin" -> Res.drawable.img_beast_griffin
-                                    "Fiend" -> Res.drawable.img_beast_fiend
-                                    "Katakan" -> Res.drawable.img_beast_katakan
-                                    "Ghoul" -> Res.drawable.img_beast_ghoul
-                                    "Drowner" -> Res.drawable.img_beast_drowner
-                                    "Nekker" -> Res.drawable.img_beast_nekker
-                                    "Noonshade Forktail" -> Res.drawable.img_beast_forktail
-                                    "Foglet" -> Res.drawable.img_beast_foglet
-                                    "Grave Hag" -> Res.drawable.img_beast_grave_hag
-                                    "Wyvern" -> Res.drawable.img_beast_wyvern
-                                    "Chort" -> Res.drawable.img_beast_chort
-                                    "Basilisk" -> Res.drawable.img_beast_basilisk
-                                    "Cockatrice" -> Res.drawable.img_beast_cockatrice
-                                    "Water Hag" -> Res.drawable.img_beast_water_hag
-                                    "Higher Vampire" -> Res.drawable.img_beast_higher_vampire
-                                    "Toad Prince" -> Res.drawable.img_beast_toad_prince
-                                    else -> null
-                                }
-
+                                val beastImageRes = beastDrawable(matchedMonster)
                                 if (beastImageRes != null) {
                                     Image(
                                         painter = painterResource(beastImageRes),
@@ -5918,6 +5414,112 @@ fun Modifier.witcherParchmentTexture(): Modifier = this.drawBehind {
 }
 
 @Composable
+fun EquipmentReforgeCard(viewModel: QuestViewModel) {
+    val slots by viewModel.gearSlots.collectAsStateWithLifecycle()
+    val saddlebag by viewModel.saddlebagItems.collectAsStateWithLifecycle()
+    val looks = schoolLookCatalog()
+    val unlocked = unlockedSchoolIds(saddlebag)
+    var craftsman by remember { mutableStateOf("Yoana") }
+    var selectedSlotId by remember { mutableStateOf("armor") }
+    val selectedSlot = slots.find { it.id == selectedSlotId } ?: slots.first()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, WitcherDarkSurfaceVariant, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "Equipment Reforge".uppercase(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = WitcherAmberGold,
+                fontFamily = FontFamily.Serif
+            )
+            Text(
+                text = "Only Yoana at Crow's Perch and Hattori in Novigrad change a piece's look. A school look unlocks when the saddlebag holds that school's gear or diagram. Stats and Blood and Wine dyes stay.",
+                fontSize = 10.sp,
+                color = WitcherMutedText
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Yoana", "Hattori").forEach { name ->
+                    val selected = craftsman == name
+                    Surface(
+                        modifier = Modifier.clickable { craftsman = name },
+                        color = if (selected) WitcherAmberGold.copy(alpha = 0.2f) else WitcherDarkBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant)
+                    ) {
+                        Text(
+                            text = name,
+                            color = if (selected) WitcherAmberGold else WitcherMutedText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            slots.forEach { slot ->
+                val selected = slot.id == selectedSlot.id
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedSlotId = slot.id }
+                        .background(WitcherDarkBackground, RoundedCornerShape(8.dp))
+                        .border(
+                            1.dp,
+                            if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(10.dp)
+                ) {
+                    Text(slot.label, color = WitcherWhiteText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(slot.statName, color = WitcherMutedText, fontSize = 10.sp)
+                    Text(
+                        text = "Appearance: ${slot.appearance}" + (slot.dye?.let { " · Dye: $it" } ?: ""),
+                        color = WitcherAmberGold,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "Apply a look to ${selectedSlot.label}",
+                color = WitcherWhiteText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                looks.forEach { look ->
+                    val available = look.id in unlocked
+                    Surface(
+                        modifier = Modifier.clickable(enabled = available) {
+                            viewModel.reforgeEquipment(selectedSlot.id, look.id, craftsman)
+                        },
+                        color = if (available) WitcherRedPrimary.copy(alpha = 0.25f) else WitcherDarkBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (available) WitcherRedPrimary else WitcherDarkSurfaceVariant)
+                    ) {
+                        Text(
+                            text = if (available) look.name else "${look.name} locked",
+                            color = if (available) WitcherWhiteText else WitcherMutedText,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun WitcherAbilityTree(
     viewModel: QuestViewModel,
     skills: List<WitcherSkill>,
@@ -5945,14 +5547,14 @@ fun WitcherAbilityTree(
             ) {
                 Column {
                     Text(
-                        text = "⚔️ Abilities & Skills".uppercase(),
+                        text = "Abilities and Skills".uppercase(),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = WitcherAmberGold,
                         fontFamily = FontFamily.Serif
                     )
                     Text(
-                        text = "Standard skills capped at 3. General capped at 1.",
+                        text = "Three ranks each. Later skills need their prerequisite.",
                         fontSize = 10.sp,
                         color = WitcherMutedText
                     )
@@ -5984,10 +5586,10 @@ fun WitcherAbilityTree(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val categories = listOf(
-                    Triple("COMBAT", "⚔️ Combat", WitcherRedPrimary),
-                    Triple("SIGNS", "✨ Signs", Color(0xFF3498DB)),
-                    Triple("ALCHEMY", "🧪 Alchemy", Color(0xFF2ECC71)),
-                    Triple("GENERAL", "⭐ General", WitcherAmberGold)
+                    Triple("COMBAT", "Combat", WitcherRedPrimary),
+                    Triple("SIGNS", "Signs", Color(0xFF3498DB)),
+                    Triple("ALCHEMY", "Alchemy", Color(0xFF2ECC71)),
+                    Triple("GENERAL", "General", WitcherAmberGold)
                 )
 
                 categories.forEach { (catId, label, catColor) ->
@@ -6024,18 +5626,45 @@ fun WitcherAbilityTree(
             if (filteredSkills.isEmpty()) {
                 Text("No skills in this category.", color = WitcherMutedText, fontSize = 12.sp)
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    filteredSkills.forEach { skill ->
+                val skillsById = filteredSkills.associateBy { it.id }
+                val depthMemo = mutableMapOf<String, Int>()
+                fun depthOf(skill: WitcherSkill): Int = depthMemo.getOrPut(skill.id) {
+                    val parents = skill.prerequisiteIds.mapNotNull { skillsById[it] }
+                    if (parents.isEmpty()) 0 else parents.maxOf { depthOf(it) } + 1
+                }
+                val skillRows = filteredSkills.groupBy { depthOf(it) }.toSortedMap()
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    skillRows.forEach { (rowIndex, rowSkills) ->
+                        Text(
+                            text = if (rowIndex == 0) "Roots" else "Needs the row above",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = WitcherMutedText
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                    rowSkills.forEach { skill ->
                         val themeColor = when (skill.category) {
                             "COMBAT" -> WitcherRedPrimary
                             "SIGNS" -> Color(0xFF3498DB)
                             "ALCHEMY" -> Color(0xFF2ECC71)
                             else -> WitcherAmberGold
                         }
+                        val unmetPrerequisites = skill.prerequisiteIds.mapNotNull { id ->
+                            skills.find { it.id == id }?.takeIf { it.level < 1 }?.name
+                        }
+                        val locked = unmetPrerequisites.isNotEmpty()
+                        val refundBlocked = skill.level == 1 && skills.any { other ->
+                            other.level > 0 && skill.id in other.prerequisiteIds
+                        }
 
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .width(250.dp)
                                 .background(WitcherDarkBackground, RoundedCornerShape(8.dp))
                                 .border(1.dp, WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
                                 .padding(10.dp)
@@ -6048,10 +5677,17 @@ fun WitcherAbilityTree(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = skill.name,
-                                        color = WitcherWhiteText,
+                                        color = if (locked) WitcherMutedText else WitcherWhiteText,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    if (locked) {
+                                        Text(
+                                            text = "Requires ${unmetPrerequisites.joinToString()}",
+                                            color = WitcherAmberGold,
+                                            fontSize = 9.sp
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -6081,6 +5717,7 @@ fun WitcherAbilityTree(
                                 ) {
                                     IconButton(
                                         onClick = { viewModel.adjustSkillPoints(skill.id, -1) },
+                                        enabled = skill.level > 0 && !refundBlocked,
                                         modifier = Modifier
                                             .size(28.dp)
                                             .background(WitcherDarkSurfaceVariant, CircleShape)
@@ -6098,11 +5735,12 @@ fun WitcherAbilityTree(
 
                                     IconButton(
                                         onClick = { viewModel.adjustSkillPoints(skill.id, 1) },
+                                        enabled = !locked && skill.level < skill.maxLevel,
                                         modifier = Modifier
                                             .size(28.dp)
                                             .background(WitcherDarkSurfaceVariant, CircleShape)
                                     ) {
-                                        Text("+", color = WitcherWhiteText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Text("+", color = if (locked) WitcherMutedText else WitcherWhiteText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -6114,6 +5752,8 @@ fun WitcherAbilityTree(
                                 fontSize = 10.sp,
                                 lineHeight = 13.sp
                             )
+                        }
+                    }
                         }
                     }
                 }

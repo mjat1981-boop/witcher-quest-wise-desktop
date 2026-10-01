@@ -1,5 +1,6 @@
 package com.example.ui
 
+import com.example.data.InMemorySaddlebagDao
 import com.example.data.Monster
 import com.example.data.MonsterDao
 import com.example.data.MonsterRepository
@@ -12,19 +13,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
- * Exercises the synchronous skill-point logic in QuestViewModel — the derived
- * math around the available point pool, per-skill max levels, and the
- * auto-level-bump in applyRecommendedBuild. These paths are pure state updates
- * on MutableStateFlow, so they run without Room or the network; the fake DAOs
+ * Exercises the synchronous skill-point and reforge logic in QuestViewModel —
+ * the point pool, three-rank cap, prerequisite gates, recommended builds, and
+ * Yoana/Hattori reforging. These paths are pure state updates on
+ * MutableStateFlow, so they run without Room or the network; the fake DAOs
  * below exist only to satisfy the repository constructors. viewModelScope needs
  * a Main dispatcher, so we install a StandardTestDispatcher (its coroutines
  * stay parked since we never advance it — the methods under test don't launch).
@@ -34,11 +40,20 @@ class QuestViewModelSkillBuildTest {
 
     private val dispatcher = StandardTestDispatcher()
 
-    private fun newViewModel(): QuestViewModel {
-        val questRepo = QuestRepository(FakeQuestDao(), FakeSaddlebagItemDao())
+    private fun newViewModel(saddlebag: SaddlebagItemDao = FakeSaddlebagItemDao()): QuestViewModel {
+        val questRepo = QuestRepository(FakeQuestDao(), saddlebag)
         val monsterRepo = MonsterRepository(FakeMonsterDao())
         return QuestViewModel(questRepo, monsterRepo)
     }
+
+    private fun diagram(school: String) = SaddlebagItem(
+        name = "$school School Steel Sword Diagram",
+        category = "DIAGRAM",
+        quantity = 1,
+        description = "",
+        rarity = "MAGIC",
+        iconLabel = "📜",
+    )
 
     private fun QuestViewModel.levelOf(id: String): Int =
         witcherSkills.value.first { it.id == id }.level
@@ -90,27 +105,130 @@ class QuestViewModelSkillBuildTest {
         vm.adjustSkillPoints("strength_training", 5)
         assertEquals(0, vm.levelOf("strength_training"))
 
-        // unknown skill id is a no-op
+        // unknown skill id is a no-op; Remastered starts every skill at rank 0
         vm.adjustSkillPoints("does_not_exist", 1)
-        assertEquals(3, vm.witcherSkills.value.sumOf { it.level }) // seeded total unchanged
+        assertEquals(0, vm.witcherSkills.value.sumOf { it.level })
     }
 
     @Test
     fun adjustSkillPointsIsBlockedWhenPointPoolIsExhausted() {
         val vm = newViewModel()
-        // Default: witcherLevel 1 -> pool of 6. Seeded spend is 3
-        // (muscle_memory, delusion, cat_school each at 1).
-        assertEquals(3, vm.witcherSkills.value.sumOf { it.level })
+        // Default: witcherLevel 1 -> pool of 6. Remastered reset spends nothing.
+        assertEquals(0, vm.witcherSkills.value.sumOf { it.level })
 
-        vm.adjustSkillPoints("fleet_footed", 1)     // spent 4
-        vm.adjustSkillPoints("arrow_deflection", 1) // spent 5
-        vm.adjustSkillPoints("whirl", 1)            // spent 6 == pool
+        repeat(3) { vm.adjustSkillPoints("muscle_memory", 1) }
+        repeat(3) { vm.adjustSkillPoints("strength_training", 1) }
         assertEquals(6, vm.witcherSkills.value.sumOf { it.level })
 
-        // Pool is now exhausted; further allocation is refused.
+        // Rend's prerequisite is met, but the pool is exhausted.
         vm.adjustSkillPoints("rend", 1)
         assertEquals(6, vm.witcherSkills.value.sumOf { it.level })
         assertEquals(0, vm.levelOf("rend"))
+    }
+
+    @Test
+    fun rankUpIsBlockedUntilPrerequisiteIsLearned() {
+        val vm = newViewModel()
+        vm.setWitcherLevel(20)
+
+        vm.adjustSkillPoints("fleet_footed", 1)
+        assertEquals(0, vm.levelOf("fleet_footed"))
+        vm.adjustSkillPoints("arrow_deflection", 1)
+        assertEquals(0, vm.levelOf("arrow_deflection"))
+
+        vm.adjustSkillPoints("muscle_memory", 1)
+        vm.adjustSkillPoints("fleet_footed", 1)
+        assertEquals(1, vm.levelOf("fleet_footed"))
+        vm.adjustSkillPoints("arrow_deflection", 1)
+        assertEquals(1, vm.levelOf("arrow_deflection"))
+    }
+
+    @Test
+    fun rankDownToZeroIsBlockedWhileADependentIsAllocated() {
+        val vm = newViewModel()
+        vm.setWitcherLevel(20)
+
+        vm.adjustSkillPoints("muscle_memory", 1)
+        vm.adjustSkillPoints("whirl", 1)
+        vm.adjustSkillPoints("muscle_memory", -1)
+        assertEquals(1, vm.levelOf("muscle_memory"))
+        assertEquals(1, vm.levelOf("whirl"))
+
+        vm.adjustSkillPoints("whirl", -1)
+        vm.adjustSkillPoints("muscle_memory", -1)
+        assertEquals(0, vm.levelOf("whirl"))
+        assertEquals(0, vm.levelOf("muscle_memory"))
+    }
+
+    @Test
+    fun generalSkillsAcceptThreeRanks() {
+        val vm = newViewModel()
+        vm.setWitcherLevel(20)
+
+        val general = vm.witcherSkills.value.filter { it.category == "GENERAL" }
+        assertTrue(general.isNotEmpty())
+        assertTrue(general.all { it.maxLevel == 3 && it.level == 0 })
+
+        repeat(3) { vm.adjustSkillPoints("gourmet", 1) }
+        assertEquals(3, vm.levelOf("gourmet"))
+        vm.adjustSkillPoints("gourmet", 1)
+        assertEquals(3, vm.levelOf("gourmet"))
+    }
+
+    @Test
+    fun recommendedBuildsFitTheSkillTree() {
+        val vm = newViewModel()
+        for (school in listOf("Cat", "Griffin", "Bear", "Wolf", "Viper", "Manticore")) {
+            vm.applyRecommendedBuild(school)
+            val skills = vm.witcherSkills.value
+            skills.filter { it.level > 0 }.forEach { skill ->
+                skill.prerequisiteIds.forEach { prereqId ->
+                    val prerequisite = skills.first { it.id == prereqId }
+                    assertTrue(
+                        prerequisite.level >= 1,
+                        "${skill.id} in $school requires $prereqId"
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun reforgeChangesAppearanceAndKeepsStatsAndDye() = runTest(dispatcher) {
+        val dao = InMemorySaddlebagDao(listOf(diagram("Cat")))
+        val vm = newViewModel(dao)
+        backgroundScope.launch { vm.saddlebagItems.collect { } }
+        advanceUntilIdle()
+
+        val before = vm.gearSlots.value.first { it.id == "armor" }
+        assertEquals("Toussaint Burgundy", before.dye)
+        assertTrue(vm.reforgeEquipment("armor", "cat", "Yoana"))
+
+        val after = vm.gearSlots.value.first { it.id == "armor" }
+        assertEquals("Cat", after.appearance)
+        assertEquals(before.statName, after.statName)
+        assertEquals(before.dye, after.dye)
+    }
+
+    @Test
+    fun reforgeIsRefusedForLockedLooksAndOtherCraftsmen() = runTest(dispatcher) {
+        val dao = InMemorySaddlebagDao()
+        val vm = newViewModel(dao)
+        backgroundScope.launch { vm.saddlebagItems.collect { } }
+        advanceUntilIdle()
+        val before = vm.gearSlots.value.map { it.appearance to it.statName to it.dye }
+
+        assertFalse(vm.reforgeEquipment("armor", "griffin", "Yoana"))
+        dao.insertItem(diagram("Griffin"))
+        advanceUntilIdle()
+        assertFalse(vm.reforgeEquipment("armor", "griffin", "Fergus"))
+        assertEquals(before, vm.gearSlots.value.map { it.appearance to it.statName to it.dye })
+
+        assertTrue(vm.reforgeEquipment("armor", "griffin", "Hattori"))
+        val after = vm.gearSlots.value.first { it.id == "armor" }
+        assertEquals("Griffin", after.appearance)
+        assertEquals("Mastercrafted Wolven Armor", after.statName)
+        assertEquals("Toussaint Burgundy", after.dye)
     }
 
     @Test
@@ -148,16 +266,19 @@ private class FakeQuestDao : QuestDao {
     override suspend fun insertQuests(quests: List<Quest>) {}
     override suspend fun updateQuest(quest: Quest) {}
     override suspend fun updateQuestStatus(id: Int, status: String) {}
+    override suspend fun updateQuestTracked(id: Int, tracked: Boolean) {}
     override suspend fun updateQuestNotes(id: Int, notes: String) {}
     override suspend fun updateNarrativeChoices(id: Int, choices: String) {}
     override suspend fun deleteQuest(quest: Quest) {}
     override suspend fun getQuestCount(): Int = 0
     override suspend fun getAllQuestTitlesSnapshot(): List<String> = emptyList()
+    override suspend fun updateQuestRegionByTitle(title: String, region: String) {}
 }
 
 private class FakeSaddlebagItemDao : SaddlebagItemDao {
     override fun getAllSaddlebagItems(): Flow<List<SaddlebagItem>> = flowOf(emptyList())
     override suspend fun getItemsCount(): Int = 0
+    override suspend fun getItemNames(): List<String> = emptyList()
     override suspend fun insertItem(item: SaddlebagItem) {}
     override suspend fun insertItems(items: List<SaddlebagItem>) {}
     override suspend fun deleteItemById(id: Int) {}

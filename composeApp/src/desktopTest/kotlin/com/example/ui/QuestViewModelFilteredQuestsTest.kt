@@ -167,6 +167,32 @@ class QuestViewModelFilteredQuestsTest {
     }
 
     @Test
+    fun trackedQuestsSortAheadOfTheActiveSort() = withVm { vm ->
+        val zenith = vm.quests.value.first { it.title == "Zenith Treasure" }
+        vm.toggleQuestTracked(zenith.id)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("Zenith Treasure", "Apple Hunt", "Axii Lessons", "Contract: Griffin", "Bear Necessities"),
+            titles(vm),
+        )
+
+        vm.setSortBy("TITLE_ASC")
+        advanceUntilIdle()
+        assertEquals(
+            listOf("Zenith Treasure", "Apple Hunt", "Axii Lessons", "Bear Necessities", "Contract: Griffin"),
+            titles(vm),
+        )
+
+        vm.setSortBy("LEVEL_DESC")
+        advanceUntilIdle()
+        assertEquals(
+            listOf("Zenith Treasure", "Bear Necessities", "Contract: Griffin", "Apple Hunt", "Axii Lessons"),
+            titles(vm),
+        )
+    }
+
+    @Test
     fun filtersCompose() = withVm { vm ->
         vm.setTypeFilter("SIDE")
         vm.setRegionFilter("VELEN")
