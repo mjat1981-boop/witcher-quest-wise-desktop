@@ -782,9 +782,11 @@ fun JournalTab(
             }
         } else {
             val groupedQuests = quests.groupBy { it.type }
-            val mainQuests = groupedQuests["MAIN"] ?: emptyList()
-            val sideContracts = (groupedQuests["SIDE"] ?: emptyList()) + (groupedQuests["CONTRACT"] ?: emptyList())
-            val treasureQuests = groupedQuests["TREASURE"] ?: emptyList()
+            val mainQuests = (groupedQuests["MAIN"] ?: emptyList()).sortedByDescending { it.tracked }
+            val sideContracts = (
+                (groupedQuests["SIDE"] ?: emptyList()) + (groupedQuests["CONTRACT"] ?: emptyList())
+            ).sortedByDescending { it.tracked }
+            val treasureQuests = (groupedQuests["TREASURE"] ?: emptyList()).sortedByDescending { it.tracked }
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -799,7 +801,8 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
                         )
                     }
                 }
@@ -811,7 +814,8 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
                         )
                     }
                 }
@@ -823,7 +827,8 @@ fun JournalTab(
                             onClick = { viewModel.selectQuest(quest) },
                             onConsultGeralt = { viewModel.askAIAboutQuestDirectly(quest, "CHAT") },
                             onConsultAdvisor = { viewModel.askAIAboutQuestDirectly(quest, "ADVISOR") },
-                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") }
+                            onToggleStatus = { viewModel.updateQuestStatus(quest.id, if (it) "COMPLETED" else "IN_PROGRESS") },
+                            onToggleTracked = { viewModel.toggleQuestTracked(quest.id) }
                         )
                     }
                 }
@@ -991,7 +996,8 @@ fun QuestListItem(
     onClick: () -> Unit,
     onConsultGeralt: (() -> Unit)? = null,
     onConsultAdvisor: (() -> Unit)? = null,
-    onToggleStatus: (Boolean) -> Unit
+    onToggleStatus: (Boolean) -> Unit,
+    onToggleTracked: () -> Unit = {}
 ) {
     val isCompleted = quest.status == "COMPLETED"
 
@@ -1014,11 +1020,12 @@ fun QuestListItem(
 
     // 3. Smooth animated border color matching the Witcher success state
     val animatedBorderColor by animateColorAsState(
-        targetValue = when (quest.status) {
-            "NOT_STARTED" -> WitcherBorderColor
-            "IN_PROGRESS" -> WitcherInProgress.copy(alpha = 0.7f)
-            "COMPLETED" -> WitcherSuccess.copy(alpha = 0.8f)
-            "FAILED" -> WitcherFailed.copy(alpha = 0.7f)
+        targetValue = when {
+            quest.tracked -> WitcherAmberGold
+            quest.status == "NOT_STARTED" -> WitcherBorderColor
+            quest.status == "IN_PROGRESS" -> WitcherInProgress.copy(alpha = 0.7f)
+            quest.status == "COMPLETED" -> WitcherSuccess.copy(alpha = 0.8f)
+            quest.status == "FAILED" -> WitcherFailed.copy(alpha = 0.7f)
             else -> WitcherBorderColor
         },
         animationSpec = tween(durationMillis = 350),
@@ -1102,6 +1109,19 @@ fun QuestListItem(
                         color = WitcherMutedText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (quest.tracked) "📍 Tracked" else "○ Untracked",
+                        fontSize = 10.sp,
+                        fontWeight = if (quest.tracked) FontWeight.Bold else FontWeight.Normal,
+                        color = if (quest.tracked) WitcherAmberGold else WitcherMutedText
+                    )
+                    Text(
+                        text = if (quest.tracked) "Untrack" else "Track",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WitcherAmberGold,
+                        modifier = Modifier.clickable { onToggleTracked() }
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     val color = when(quest.priority) {
@@ -3795,6 +3815,10 @@ fun ProfileTab(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        EquipmentReforgeCard(viewModel = viewModel)
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // Personal witcher journal secrets notepad
         Card(
             modifier = Modifier
@@ -5918,6 +5942,114 @@ fun Modifier.witcherParchmentTexture(): Modifier = this.drawBehind {
 }
 
 @Composable
+fun EquipmentReforgeCard(viewModel: QuestViewModel) {
+    val slots by viewModel.gearSlots.collectAsStateWithLifecycle()
+    val looks by viewModel.schoolLooks.collectAsStateWithLifecycle()
+    var craftsman by remember { mutableStateOf("Yoana") }
+    var selectedSlotId by remember { mutableStateOf("armor") }
+    val selectedSlot = slots.find { it.id == selectedSlotId } ?: slots.first()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, WitcherDarkSurfaceVariant, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "🔨 Equipment Reforge".uppercase(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = WitcherAmberGold,
+                fontFamily = FontFamily.Serif
+            )
+            Text(
+                text = "Only Yoana at Crow's Perch and Hattori in Novigrad change a piece's look. Stats and Blood and Wine dyes stay.",
+                fontSize = 10.sp,
+                color = WitcherMutedText
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Yoana", "Hattori").forEach { name ->
+                    val selected = craftsman == name
+                    Surface(
+                        modifier = Modifier.clickable { craftsman = name },
+                        color = if (selected) WitcherAmberGold.copy(alpha = 0.2f) else WitcherDarkBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant)
+                    ) {
+                        Text(
+                            text = name,
+                            color = if (selected) WitcherAmberGold else WitcherMutedText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            slots.forEach { slot ->
+                val selected = slot.id == selectedSlot.id
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedSlotId = slot.id }
+                        .background(WitcherDarkBackground, RoundedCornerShape(8.dp))
+                        .border(
+                            1.dp,
+                            if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(10.dp)
+                ) {
+                    Text(slot.label, color = WitcherWhiteText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(slot.statName, color = WitcherMutedText, fontSize = 10.sp)
+                    Text(
+                        text = "Appearance: ${slot.appearance}" + (slot.dye?.let { " · Dye: $it" } ?: ""),
+                        color = WitcherAmberGold,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "Apply a look to ${selectedSlot.label}",
+                color = WitcherWhiteText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                looks.forEach { look ->
+                    val label = if (look.unlocked) look.name else "Unlock ${look.name}"
+                    Surface(
+                        modifier = Modifier.clickable {
+                            if (look.unlocked) {
+                                viewModel.reforgeEquipment(selectedSlot.id, look.id, craftsman)
+                            } else {
+                                viewModel.unlockSchoolLook(look.id)
+                            }
+                        },
+                        color = if (look.unlocked) WitcherRedPrimary.copy(alpha = 0.25f) else WitcherDarkBackground,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (look.unlocked) WitcherRedPrimary else WitcherDarkSurfaceVariant)
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (look.unlocked) WitcherWhiteText else WitcherMutedText,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun WitcherAbilityTree(
     viewModel: QuestViewModel,
     skills: List<WitcherSkill>,
@@ -5952,7 +6084,7 @@ fun WitcherAbilityTree(
                         fontFamily = FontFamily.Serif
                     )
                     Text(
-                        text = "Standard skills capped at 3. General capped at 1.",
+                        text = "Three ranks each. Later skills need their prerequisite.",
                         fontSize = 10.sp,
                         color = WitcherMutedText
                     )
@@ -6032,6 +6164,13 @@ fun WitcherAbilityTree(
                             "ALCHEMY" -> Color(0xFF2ECC71)
                             else -> WitcherAmberGold
                         }
+                        val unmetPrerequisites = skill.prerequisiteIds.mapNotNull { id ->
+                            skills.find { it.id == id }?.takeIf { it.level < 1 }?.name
+                        }
+                        val locked = unmetPrerequisites.isNotEmpty()
+                        val refundBlocked = skill.level == 1 && skills.any { other ->
+                            other.level > 0 && skill.id in other.prerequisiteIds
+                        }
 
                         Column(
                             modifier = Modifier
@@ -6048,10 +6187,17 @@ fun WitcherAbilityTree(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = skill.name,
-                                        color = WitcherWhiteText,
+                                        color = if (locked) WitcherMutedText else WitcherWhiteText,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    if (locked) {
+                                        Text(
+                                            text = "Requires ${unmetPrerequisites.joinToString()}",
+                                            color = WitcherAmberGold,
+                                            fontSize = 9.sp
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -6081,6 +6227,7 @@ fun WitcherAbilityTree(
                                 ) {
                                     IconButton(
                                         onClick = { viewModel.adjustSkillPoints(skill.id, -1) },
+                                        enabled = skill.level > 0 && !refundBlocked,
                                         modifier = Modifier
                                             .size(28.dp)
                                             .background(WitcherDarkSurfaceVariant, CircleShape)
@@ -6098,11 +6245,12 @@ fun WitcherAbilityTree(
 
                                     IconButton(
                                         onClick = { viewModel.adjustSkillPoints(skill.id, 1) },
+                                        enabled = !locked && skill.level < skill.maxLevel,
                                         modifier = Modifier
                                             .size(28.dp)
                                             .background(WitcherDarkSurfaceVariant, CircleShape)
                                     ) {
-                                        Text("+", color = WitcherWhiteText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Text("+", color = if (locked) WitcherMutedText else WitcherWhiteText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }

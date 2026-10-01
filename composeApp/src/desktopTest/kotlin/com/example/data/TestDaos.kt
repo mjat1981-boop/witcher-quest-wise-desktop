@@ -42,6 +42,9 @@ internal class InMemoryQuestDao(
     override suspend fun updateQuestStatus(id: Int, status: String) =
         state.update { l -> l.map { if (it.id == id) it.copy(status = status) else it } }
 
+    override suspend fun updateQuestTracked(id: Int, tracked: Boolean) =
+        state.update { l -> l.map { if (it.id == id) it.copy(tracked = tracked) else it } }
+
     override suspend fun updateQuestNotes(id: Int, notes: String) =
         state.update { l -> l.map { if (it.id == id) it.copy(notes = notes) else it } }
 

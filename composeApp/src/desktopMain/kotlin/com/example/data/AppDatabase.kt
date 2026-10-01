@@ -9,7 +9,7 @@ import com.example.data.utils.Converters
 import kotlinx.coroutines.Dispatchers
 import java.io.File
 
-@Database(entities = [Quest::class, SaddlebagItem::class, Monster::class], version = 6, exportSchema = false)
+@Database(entities = [Quest::class, SaddlebagItem::class, Monster::class], version = 7, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun questDao(): QuestDao

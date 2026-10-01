@@ -56,13 +56,16 @@ class AppDatabaseDaoTest {
         dao.updateQuestStatus(one.id, "COMPLETED")
         dao.updateQuestNotes(one.id, "wind's howling")
         dao.updateNarrativeChoices(one.id, "spared the ghoul")
+        dao.updateQuestTracked(one.id, true)
 
         val after = dao.getAllQuests().first().associateBy { it.id }
         assertEquals("COMPLETED", after.getValue(one.id).status)
         assertEquals("wind's howling", after.getValue(one.id).notes)
         assertEquals("spared the ghoul", after.getValue(one.id).narrativeChoices)
+        assertEquals(true, after.getValue(one.id).tracked)
         assertEquals("NOT_STARTED", after.getValue(two.id).status)
         assertEquals("", after.getValue(two.id).notes)
+        assertEquals(false, after.getValue(two.id).tracked)
     }
 
     @Test

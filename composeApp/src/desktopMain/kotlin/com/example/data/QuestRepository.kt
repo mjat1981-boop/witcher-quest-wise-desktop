@@ -124,6 +124,10 @@ class QuestRepository(
         questDao.updateQuestStatus(id, status)
     }
 
+    suspend fun updateTracked(id: Int, tracked: Boolean) {
+        questDao.updateQuestTracked(id, tracked)
+    }
+
     suspend fun updateNotes(id: Int, notes: String) {
         questDao.updateQuestNotes(id, notes)
     }

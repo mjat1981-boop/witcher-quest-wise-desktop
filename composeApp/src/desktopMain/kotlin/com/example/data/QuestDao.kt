@@ -20,6 +20,9 @@ interface QuestDao {
     @Query("UPDATE quests SET status = :status WHERE id = :id")
     suspend fun updateQuestStatus(id: Int, status: String)
 
+    @Query("UPDATE quests SET tracked = :tracked WHERE id = :id")
+    suspend fun updateQuestTracked(id: Int, tracked: Boolean)
+
     @Query("UPDATE quests SET notes = :notes WHERE id = :id")
     suspend fun updateQuestNotes(id: Int, notes: String)
 
