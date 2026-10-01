@@ -18,5 +18,7 @@ internal fun whiteOrchardQuests(): List<Quest> = listOf(
     quest("Deserter Gold", "TREASURE", "WHITE_ORCHARD", 3, "A Nilfgaardian deserter buried his pay near the garrison road.", "Note", "Crowns"),
     quest("Dirty Funds", "TREASURE", "WHITE_ORCHARD", 4, "Stolen coin is stashed where the fighting passed through the orchard.", "Note", "Crowns"),
     quest("Temerian Valuables", "TREASURE", "WHITE_ORCHARD", 4, "A Temerian soldier hid valuables before the Nilfgaardian advance.", "Note", "Crowns, crafting parts"),
-    quest("Places of Power: Exploration", "TREASURE", "WHITE_ORCHARD", 1, "Places of Power around the region grant a skill point the first time they are drawn.", "Exploration", "Skill point")
+    quest("Places of Power: Exploration", "TREASURE", "WHITE_ORCHARD", 1, "Places of Power around the region grant a skill point the first time they are drawn.", "Exploration", "Skill point"),
+    quest("Something Ends, Something Begins", "MAIN", "WHITE_ORCHARD", 30, "The story ends at the White Orchard inn, with whoever still walks the Path beside Geralt.", "Ciri", "The ending"),
+    quest("Collect 'em All", "SIDE", "WHITE_ORCHARD", 5, "The innkeep at White Orchard starts Geralt collecting the Gwent cards still scattered across the world.", "Elsa", "Gwent cards")
 )

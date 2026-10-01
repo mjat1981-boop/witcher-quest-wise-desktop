@@ -360,6 +360,26 @@ data class QuestDecisionTree(
                             severity = ConsequenceSeverity.NEUTRAL
                         ),
                         logMessage = "Decision Path Chosen: Joined Hjalmar. Slew the berserker clan, leading to Hjalmar's coronation as King. Skellige remains trapped in endless blood raids against Nilfgaard."
+                    ),
+                    DecisionPath(
+                        id = "skellige_neither",
+                        choiceName = "Help neither",
+                        summary = "Refuse both Cerys's investigation and Hjalmar's raid.",
+                        immediateNode = DecisionNode(
+                            id = "skellige_neither_imm",
+                            type = NodeType.IMMEDIATE_CONSEQUENCE,
+                            title = "The feast stays unresolved",
+                            description = "Neither an Craite child gets Geralt's sword or his questions.",
+                            severity = ConsequenceSeverity.NEGATIVE
+                        ),
+                        longTermNode = DecisionNode(
+                            id = "skellige_neither_lt",
+                            type = NodeType.LONG_TERM_CONSEQUENCE,
+                            title = "Svanrige takes the throne",
+                            description = "Svanrige Bran takes the throne and rules Skellige as a dictator.",
+                            severity = ConsequenceSeverity.NEGATIVE
+                        ),
+                        logMessage = "Helped neither Cerys nor Hjalmar. Svanrige Bran takes the throne and rules as a dictator."
                     )
                 )
             ),
@@ -492,7 +512,7 @@ data class QuestDecisionTree(
                             id = "ciri_emperor_lt",
                             type = NodeType.LONG_TERM_CONSEQUENCE,
                             title = "Empress Ciri of Nilfgaard",
-                            description = "Ciri departs Skellige to rule Nilfgaard, using her Witcher training to govern the empire with deep wisdom.",
+                            description = "Three or more positive points and Ciri lives. Fewer, and she dies in the White Frost. If she lives and Geralt took her to Emhyr, she becomes Empress.",
                             flavorNote = "👑 Empress Ciri: Melancholy but noble duty.",
                             severity = ConsequenceSeverity.POSITIVE
                         ),
@@ -514,7 +534,7 @@ data class QuestDecisionTree(
                             id = "ciri_witcher_lt",
                             type = NodeType.LONG_TERM_CONSEQUENCE,
                             title = "Witcher Ciri on the Path",
-                            description = "Ciri receives her custom silver sword from Geralt at Tavern in White Orchard, walking the world as a legendary free monster slayer.",
+                            description = "Three or more positive points and Ciri lives. Fewer, and she dies in the White Frost. If she lives and Geralt did not take her to Emhyr, she becomes a Witcher.",
                             flavorNote = "🐺 Witcher Ciri: Pure joy, liberating freedom.",
                             severity = ConsequenceSeverity.POSITIVE
                         ),

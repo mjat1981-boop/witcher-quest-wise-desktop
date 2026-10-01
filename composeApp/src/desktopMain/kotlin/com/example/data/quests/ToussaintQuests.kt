@@ -55,5 +55,17 @@ internal fun toussaintQuests(): List<Quest> = listOf(
     quest("Coin Doesn't Stink", "TREASURE", "TOUSSAINT", 35, "A tax collector sank his skim in a Beauclair canal.", "Note", "Crowns"),
     quest("The Last Exploits of Selina's Gang", "TREASURE", "TOUSSAINT", 37, "Selina's gang buried their last take and then died for it.", "Note", "Crowns"),
     quest("What Was This About Again?", "TREASURE", "TOUSSAINT", 34, "A drunk knight's map leads to a chest he cannot remember burying.", "Map", "Relic"),
-    quest("The Suffering of Young Francois", "TREASURE", "TOUSSAINT", 36, "A boy's grave marker is also a waymark to his family's hidden silver.", "Note", "Silver")
+    quest("The Suffering of Young Francois", "TREASURE", "TOUSSAINT", 36, "A boy's grave marker is also a waymark to his family's hidden silver.", "Note", "Silver"),
+    quest("Burlap is the New Stripe", "SIDE", "TOUSSAINT", 37, "A knightly order's new fashion is a curse, and the man inside the sack wants out.", "Knight", "200 XP"),
+    quest("A Portrait of the Witcher as an Old Man", "SIDE", "TOUSSAINT", 36, "Corvo Bianco wants a portrait, and the painter's price is a story Geralt has already lived.", "Barnabas-Basil", "A portrait"),
+    quest("Filibert Always Pays His Debts", "TREASURE", "TOUSSAINT", 35, "The merchant Filibert buried what he owed, and the map is the only honest thing he left.", "Map", "Crowns"),
+    quest("Around the World in Eight Days", "TREASURE", "TOUSSAINT", 40, "A traveler's notes mark a circuit of caches that can be run in eight days.", "Notes", "Crowns"),
+    quest("But Other Than That, How Did You Enjoy the Play?", "TREASURE", "TOUSSAINT", 38, "A blood-laced journal in the Seidhe Llygad amphitheater leads to a dead actor's stash.", "Journal", "Crowns"),
+    quest("Spoontaneous Profits!", "TREASURE", "TOUSSAINT", 42, "A spoon-key note in the Trastamara ruins is the profit someone did not live to spend.", "Note", "Crowns"),
+    quest("The Curse of Carnarvon", "TREASURE", "TOUSSAINT", 39, "Carnarvon's journal, northwest of Castel Ravello, is a curse and a cache.", "Journal", "Relic"),
+    quest("The Toussaint Prison Experiment", "TREASURE", "TOUSSAINT", 47, "A diary in the Bastoy prison ruins records an experiment and where they hid the result.", "Diary", "Relic"),
+    quest("Big Feet to Fill: The First Group", "SIDE", "TOUSSAINT", 40, "The first group of giant tracks leads northeast of Fox Hollow.", "Knight", "80 XP"),
+    quest("Big Feet to Fill: The Fifth Group", "SIDE", "TOUSSAINT", 40, "The fifth group of tracks ends north of the Prophet Lebioda statue, among bandits.", "Knight", "80 XP"),
+    quest("Amidst the Mill's Grist", "SIDE", "TOUSSAINT", 37, "Count de la Croix's mill is grinding more than grain, and the peasants are the ones afraid.", "Peasants", "120 XP"),
+    quest("Gwent: Never Fear, Skellige's Here", "SIDE", "TOUSSAINT", 35, "Skellige players brought their deck to Toussaint, and they will play.", "Skellige players", "Gwent cards")
 )

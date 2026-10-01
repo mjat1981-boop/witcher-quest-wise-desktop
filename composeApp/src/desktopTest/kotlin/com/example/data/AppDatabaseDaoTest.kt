@@ -168,6 +168,15 @@ class AppDatabaseDaoTest {
     fun choiceQuestHasDialogueAndPlainTreasureDoesNot() {
         assertNotNull(QuestDecisionTree.getTreeForQuest("Family Matters"))
         assertNotNull(QuestDecisionTree.getTreeForQuest("Whatsoever a Man Soweth..."))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("For the Advancement of Learning"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Final Preparations"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("The Child of the Elder Blood"))
+        val battlefield = QuestDecisionTree.getTreeForQuest("Blood on the Battlefield")
+        assertNotNull(battlefield)
+        val lines = battlefield.paths.joinToString(" ") { it.choiceName }
+        assertTrue(lines.contains("lift your spirits"))
+        assertTrue(lines.contains("don't have to be good at everything"))
+        assertTrue(!lines.contains("laboratory") && !lines.contains("Go for it"))
         assertNull(QuestDecisionTree.getTreeForQuest("Dirty Funds"))
     }
 }
