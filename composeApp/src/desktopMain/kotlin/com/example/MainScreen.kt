@@ -1800,11 +1800,10 @@ fun MonsterCardItem(
                     contentDescription = monster.name + " portrait sketch",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(185.dp)
                         .padding(bottom = 12.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.FillWidth
                 )
             }
 
@@ -2014,23 +2013,29 @@ fun AlchemyRecipeCardItem(
                         border = BorderStroke(1.dp, strokeColor),
                         shape = RoundedCornerShape(6.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(text = req.icon, fontSize = 11.sp)
-                            Text(
-                                text = "${req.name} (${ownedQty}/${req.quantity})",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (hasEnough) WitcherWhiteText else WitcherMutedText
-                            )
-                            if (hasEnough) {
-                                Text("✓", color = WitcherSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            } else {
-                                Text("✗", color = WitcherFailed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).widthIn(max = 240.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(text = req.icon, fontSize = 11.sp)
+                                Text(
+                                    text = "${req.name} (${ownedQty}/${req.quantity})",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (hasEnough) WitcherWhiteText else WitcherMutedText
+                                )
+                                if (hasEnough) {
+                                    Text("✓", color = WitcherSuccess, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text("✗", color = WitcherFailed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
+                            Text(
+                                text = "Found: ${req.foundAt}",
+                                fontSize = 9.sp,
+                                color = WitcherMutedText
+                            )
                         }
                     }
                 }
