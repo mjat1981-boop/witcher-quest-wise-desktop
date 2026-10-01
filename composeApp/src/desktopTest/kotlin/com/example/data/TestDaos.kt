@@ -75,6 +75,8 @@ internal class InMemorySaddlebagDao(
 
     override suspend fun getItemsCount(): Int = state.value.size
 
+    override suspend fun getItemNames(): List<String> = state.value.map { it.name }
+
     override suspend fun insertItem(item: SaddlebagItem) = state.update { it + withId(item) }
 
     override suspend fun insertItems(items: List<SaddlebagItem>) =

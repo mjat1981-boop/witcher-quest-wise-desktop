@@ -27,6 +27,9 @@ interface SaddlebagItemDao {
     @Query("SELECT COUNT(*) FROM saddlebag_items")
     suspend fun getItemsCount(): Int
 
+    @Query("SELECT name FROM saddlebag_items")
+    suspend fun getItemNames(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: SaddlebagItem)
 

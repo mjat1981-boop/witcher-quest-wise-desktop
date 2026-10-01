@@ -1,5 +1,6 @@
 package com.example.ui
 
+import com.example.data.InMemorySaddlebagDao
 import com.example.data.Monster
 import com.example.data.MonsterDao
 import com.example.data.MonsterRepository
@@ -12,8 +13,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -36,11 +40,20 @@ class QuestViewModelSkillBuildTest {
 
     private val dispatcher = StandardTestDispatcher()
 
-    private fun newViewModel(): QuestViewModel {
-        val questRepo = QuestRepository(FakeQuestDao(), FakeSaddlebagItemDao())
+    private fun newViewModel(saddlebag: SaddlebagItemDao = FakeSaddlebagItemDao()): QuestViewModel {
+        val questRepo = QuestRepository(FakeQuestDao(), saddlebag)
         val monsterRepo = MonsterRepository(FakeMonsterDao())
         return QuestViewModel(questRepo, monsterRepo)
     }
+
+    private fun diagram(school: String) = SaddlebagItem(
+        name = "$school School Steel Sword Diagram",
+        category = "DIAGRAM",
+        quantity = 1,
+        description = "",
+        rarity = "MAGIC",
+        iconLabel = "📜",
+    )
 
     private fun QuestViewModel.levelOf(id: String): Int =
         witcherSkills.value.first { it.id == id }.level
@@ -181,12 +194,14 @@ class QuestViewModelSkillBuildTest {
     }
 
     @Test
-    fun reforgeChangesAppearanceAndKeepsStatsAndDye() {
-        val vm = newViewModel()
+    fun reforgeChangesAppearanceAndKeepsStatsAndDye() = runTest(dispatcher) {
+        val dao = InMemorySaddlebagDao(listOf(diagram("Cat")))
+        val vm = newViewModel(dao)
+        backgroundScope.launch { vm.saddlebagItems.collect { } }
+        advanceUntilIdle()
+
         val before = vm.gearSlots.value.first { it.id == "armor" }
         assertEquals("Toussaint Burgundy", before.dye)
-
-        vm.unlockSchoolLook("cat")
         assertTrue(vm.reforgeEquipment("armor", "cat", "Yoana"))
 
         val after = vm.gearSlots.value.first { it.id == "armor" }
@@ -196,12 +211,16 @@ class QuestViewModelSkillBuildTest {
     }
 
     @Test
-    fun reforgeIsRefusedForLockedLooksAndOtherCraftsmen() {
-        val vm = newViewModel()
+    fun reforgeIsRefusedForLockedLooksAndOtherCraftsmen() = runTest(dispatcher) {
+        val dao = InMemorySaddlebagDao()
+        val vm = newViewModel(dao)
+        backgroundScope.launch { vm.saddlebagItems.collect { } }
+        advanceUntilIdle()
         val before = vm.gearSlots.value.map { it.appearance to it.statName to it.dye }
 
         assertFalse(vm.reforgeEquipment("armor", "griffin", "Yoana"))
-        vm.unlockSchoolLook("griffin")
+        dao.insertItem(diagram("Griffin"))
+        advanceUntilIdle()
         assertFalse(vm.reforgeEquipment("armor", "griffin", "Fergus"))
         assertEquals(before, vm.gearSlots.value.map { it.appearance to it.statName to it.dye })
 
@@ -258,6 +277,7 @@ private class FakeQuestDao : QuestDao {
 private class FakeSaddlebagItemDao : SaddlebagItemDao {
     override fun getAllSaddlebagItems(): Flow<List<SaddlebagItem>> = flowOf(emptyList())
     override suspend fun getItemsCount(): Int = 0
+    override suspend fun getItemNames(): List<String> = emptyList()
     override suspend fun insertItem(item: SaddlebagItem) {}
     override suspend fun insertItems(items: List<SaddlebagItem>) {}
     override suspend fun deleteItemById(id: Int) {}

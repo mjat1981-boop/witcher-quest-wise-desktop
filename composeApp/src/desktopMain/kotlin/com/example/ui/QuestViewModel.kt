@@ -42,8 +42,7 @@ data class ReforgeSlot(
 
 data class SchoolLook(
     val id: String,
-    val name: String,
-    val unlocked: Boolean = false
+    val name: String
 )
 
 class QuestViewModel(private val repository: QuestRepository, private val monsterRepository: MonsterRepository
@@ -208,9 +207,6 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
 
     private val _gearSlots = MutableStateFlow(defaultGearSlots())
     val gearSlots = _gearSlots.asStateFlow()
-
-    private val _schoolLooks = MutableStateFlow(defaultSchoolLooks())
-    val schoolLooks = _schoolLooks.asStateFlow()
 
 
     // Chat State for AI Advisor
@@ -480,22 +476,16 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         }
     }
 
-    /** Learn a school appearance so it can be applied at a master craftsman. */
-    fun unlockSchoolLook(lookId: String) {
-        _schoolLooks.value = _schoolLooks.value.map { look ->
-            if (look.id == lookId) look.copy(unlocked = true) else look
-        }
-    }
-
     /**
      * Change a slot's appearance without touching its stats or dye.
-     * Only Yoana and Hattori offer the service, and the look must be unlocked.
+     * Only Yoana and Hattori offer the service, and the look must already be
+     * unlocked by a matching diagram or gear piece in the saddlebag.
      * Returns false when the reforge is refused.
      */
     fun reforgeEquipment(slotId: String, lookId: String, craftsman: String): Boolean {
         if (craftsman != "Yoana" && craftsman != "Hattori") return false
-        val look = _schoolLooks.value.find { it.id == lookId } ?: return false
-        if (!look.unlocked) return false
+        val look = defaultSchoolLooks().find { it.id == lookId } ?: return false
+        if (look.id !in unlockedSchoolIds(saddlebagItems.value)) return false
         if (_gearSlots.value.none { it.id == slotId }) return false
 
         _gearSlots.value = _gearSlots.value.map { slot ->
@@ -1084,6 +1074,19 @@ private fun defaultGearSlots(): List<ReforgeSlot> = listOf(
     ReforgeSlot("trousers", "Trousers", "Mastercrafted Wolven Trousers", "Wolven"),
     ReforgeSlot("boots", "Boots", "Mastercrafted Wolven Boots", "Wolven")
 )
+
+fun schoolLookCatalog(): List<SchoolLook> = defaultSchoolLooks()
+
+/** A look unlocks when the saddlebag holds gear or a diagram whose name contains the school. */
+fun unlockedSchoolIds(items: List<SaddlebagItem>): Set<String> {
+    return defaultSchoolLooks().filter { look ->
+        items.any { item ->
+            val gearOrDiagram = item.category.equals("GEAR", ignoreCase = true) ||
+                item.category.equals("DIAGRAM", ignoreCase = true)
+            gearOrDiagram && item.name.contains(look.name, ignoreCase = true)
+        }
+    }.map { it.id }.toSet()
+}
 
 private fun defaultSchoolLooks(): List<SchoolLook> = listOf(
     SchoolLook("wolf", "Wolf"),

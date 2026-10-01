@@ -24,6 +24,15 @@ class QuestRepository(
             }
         }
         
+        val catSchoolDiagram = SaddlebagItem(
+            name = "Cat School Steel Sword Diagram",
+            category = "DIAGRAM",
+            quantity = 1,
+            description = "A master diagram from the Cat School. Owning it unlocks the Cat appearance when Yoana or Hattori reforge a piece.",
+            rarity = "MAGIC",
+            iconLabel = "📜"
+        )
+
         // Populate default saddlebag item loadout if empty
         if (saddlebagItemDao.getItemsCount() == 0) {
             val defaultItems = listOf(
@@ -90,9 +99,12 @@ class QuestRepository(
                     description = "Glows with raw primal force. When slotted in the character skill tree, boosts physical sword damage.",
                     rarity = "RELIC",
                     iconLabel = "🩸"
-                )
+                ),
+                catSchoolDiagram
             )
             saddlebagItemDao.insertItems(defaultItems)
+        } else if (catSchoolDiagram.name !in saddlebagItemDao.getItemNames()) {
+            saddlebagItemDao.insertItem(catSchoolDiagram)
         }
     }
 
