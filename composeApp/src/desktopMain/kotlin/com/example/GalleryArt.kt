@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -98,7 +99,13 @@ import witcher_quest_wise_desktop.composeapp.generated.resources.img_loc_oxenfur
 import witcher_quest_wise_desktop.composeapp.generated.resources.img_loc_skellige
 import witcher_quest_wise_desktop.composeapp.generated.resources.img_loc_toussaint
 import witcher_quest_wise_desktop.composeapp.generated.resources.img_loc_velen
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_alchemy_oil
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_alchemy_potion
 import witcher_quest_wise_desktop.composeapp.generated.resources.img_loc_white_orchard
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_nav_beast
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_nav_gear
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_nav_journal
+import witcher_quest_wise_desktop.composeapp.generated.resources.img_nav_potion
 
 data class GwentCard(
     val name: String,
@@ -262,7 +269,7 @@ fun GwentGalleryCard() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "🃏 Gwent Deck & Cards",
+                    text = "Gwent Deck",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = WitcherAmberGold
@@ -362,6 +369,99 @@ fun GwentGalleryCard() {
                     Text("Shown Power", fontSize = 10.sp, color = WitcherMutedText)
                     Text("$power PTS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WitcherWhiteText)
                 }
+            }
+        }
+    }
+}
+
+data class GlossaryEntry(
+    val id: String,
+    val label: String,
+    val image: DrawableResource,
+)
+
+fun glossaryEntries(): List<GlossaryEntry> = listOf(
+    GlossaryEntry("JOURNAL", "Journal", Res.drawable.img_nav_journal),
+    GlossaryEntry("BEASTS", "Beasts", Res.drawable.img_nav_beast),
+    GlossaryEntry("ALCHEMY", "Alchemy", Res.drawable.img_nav_potion),
+    GlossaryEntry("GWENT", "Gwent", Res.drawable.img_gwent_back),
+    GlossaryEntry("GEAR", "Gear", Res.drawable.img_nav_gear),
+    GlossaryEntry("COUNSEL", "Counsel", Res.drawable.img_gwent_geralt),
+)
+
+fun alchemyCategoryImage(category: String): DrawableResource =
+    if (category == "OIL") Res.drawable.img_alchemy_oil else Res.drawable.img_alchemy_potion
+
+fun counselPortrait(name: String): DrawableResource = when (name) {
+    "Vesemir" -> Res.drawable.img_gwent_vesemir
+    "Yennefer" -> Res.drawable.img_gwent_yennefer
+    "Jaskier" -> Res.drawable.img_gwent_jaskier
+    else -> Res.drawable.img_gwent_geralt
+}
+
+@Composable
+fun PlaceTitle(text: String) {
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Text(
+            text = text,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = WitcherAmberGold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(WitcherAmberGold)
+        )
+    }
+}
+
+@Composable
+fun GlossaryRail(currentTab: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .width(200.dp)
+            .fillMaxHeight()
+            .background(WitcherDarkSurface)
+            .padding(vertical = 12.dp, horizontal = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        glossaryEntries().forEach { entry ->
+            val selected = currentTab == entry.id
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onSelect(entry.id) }
+                    .background(if (selected) WitcherRedPrimary.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.Transparent)
+                    .border(
+                        width = if (selected) 1.dp else 0.dp,
+                        color = if (selected) WitcherAmberGold else androidx.compose.ui.graphics.Color.Transparent,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Image(
+                    painter = painterResource(entry.image),
+                    contentDescription = entry.label,
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Text(
+                    text = entry.label,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (selected) WitcherAmberGold else WitcherMutedText,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif
+                )
             }
         }
     }

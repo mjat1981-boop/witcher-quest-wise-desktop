@@ -49,8 +49,11 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
 ) : ViewModel() {
 
     // Main UI Tabs
-    private val _currentTab = MutableStateFlow("JOURNAL") // "JOURNAL", "BESTIARY", "ADVISOR", "PROFILE"
+    private val _currentTab = MutableStateFlow("JOURNAL") // JOURNAL, BEASTS, ALCHEMY, GWENT, GEAR, COUNSEL
     val currentTab: StateFlow<String> = _currentTab.asStateFlow()
+
+    private val _counselVoice = MutableStateFlow("GERALT") // GERALT or ADVISOR
+    val counselVoice: StateFlow<String> = _counselVoice.asStateFlow()
 
     // Quests Live Data
     val quests: StateFlow<List<Quest>> = repository.allQuests
@@ -245,9 +248,14 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         _currentTab.value = tab
     }
 
+    fun setCounselVoice(voice: String) {
+        _counselVoice.value = voice
+    }
+
     fun askVesemirAboutMonster(monsterName: String) {
         setAdvisor("Vesemir")
-        setTab("ADVISOR")
+        setCounselVoice("ADVISOR")
+        setTab("COUNSEL")
         sendAdvisorMessage("Tell me how to fight a $monsterName. What are its exact vulnerabilities, and how should I prepare for such a contract?")
     }
 
@@ -566,8 +574,8 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
     }
 
     fun askAIAboutQuestDirectly(quest: Quest, destinationTab: String) {
-        // Set the active tab
-        _currentTab.value = destinationTab
+        setCounselVoice(if (destinationTab == "CHAT") "GERALT" else "ADVISOR")
+        _currentTab.value = "COUNSEL"
         
         // Prepare query
         val userQuery = "I have a contract/quest called '${quest.title}' (Recommended Level: ${quest.recommendedLevel}) situated in ${quest.region.replace("_", " ")}. Tell me exactly what is involved, what level is recommended, and what monster oils, potions, and signs I should prepare."

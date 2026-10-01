@@ -82,12 +82,6 @@ fun MainScreen(viewModel: QuestViewModel) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = WitcherDarkBackground,
-        bottomBar = {
-            WitcherBottomNavBar(
-                currentTab = currentTab,
-                onTabSelected = { viewModel.setTab(it) }
-            )
-        },
         floatingActionButton = {
             if (currentTab == "JOURNAL") {
                 FloatingActionButton(
@@ -109,6 +103,16 @@ fun MainScreen(viewModel: QuestViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+        ) {
+        GlossaryRail(
+            currentTab = currentTab,
+            onSelect = { viewModel.setTab(it) },
+            modifier = Modifier.align(Alignment.CenterStart)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 200.dp)
                 .background(
                     brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                         colors = listOf(
@@ -123,10 +127,12 @@ fun MainScreen(viewModel: QuestViewModel) {
             Crossfade(targetState = currentTab, label = "TabTransition") { tab ->
                 when (tab) {
                     "JOURNAL" -> JournalTab(viewModel, filteredQuests)
-                    "BESTIARY" -> BestiaryTab(viewModel)
-                    "CHAT" -> ChatTab(viewModel)
-                    "ADVISOR" -> AdvisorTab(viewModel)
-                    "PROFILE" -> ProfileTab(viewModel, quests)
+                    "BEASTS" -> BestiaryTab(viewModel, section = "MONSTERS")
+                    "ALCHEMY" -> BestiaryTab(viewModel, section = "ALCHEMY")
+                    "GWENT" -> GwentPlace()
+                    "GEAR" -> GearPlace(viewModel)
+                    "COUNSEL" -> CounselPlace(viewModel)
+                    else -> JournalTab(viewModel, filteredQuests)
                 }
             }
 
@@ -148,7 +154,6 @@ fun MainScreen(viewModel: QuestViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("👜", fontSize = 16.sp)
                     Text("Saddlebags", color = WitcherAmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -212,6 +217,69 @@ fun MainScreen(viewModel: QuestViewModel) {
                     }
                 )
             }
+        }
+        }
+    }
+}
+
+@Composable
+fun GwentPlace() {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        PlaceTitle("Gwent")
+        GwentGalleryCard()
+    }
+}
+
+@Composable
+fun GearPlace(viewModel: QuestViewModel) {
+    val level by viewModel.witcherLevel.collectAsStateWithLifecycle()
+    val skills by viewModel.witcherSkills.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        PlaceTitle("Gear")
+        WitcherAbilityTree(viewModel = viewModel, skills = skills, level = level)
+        Spacer(modifier = Modifier.height(14.dp))
+        EquipmentReforgeCard(viewModel = viewModel)
+    }
+}
+
+@Composable
+fun CounselPlace(viewModel: QuestViewModel) {
+    val voice by viewModel.counselVoice.collectAsStateWithLifecycle()
+    val advisor by viewModel.selectedAdvisor.collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            PlaceTitle("Counsel")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Geralt", "Vesemir", "Yennefer", "Jaskier").forEach { name ->
+                    val selected = if (name == "Geralt") voice == "GERALT" else voice == "ADVISOR" && advisor == name
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (name == "Geralt") viewModel.setCounselVoice("GERALT")
+                                else {
+                                    if (advisor != name) viewModel.setAdvisor(name)
+                                    viewModel.setCounselVoice("ADVISOR")
+                                }
+                            }
+                            .border(1.dp, if (selected) WitcherAmberGold else WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(counselPortrait(name)),
+                            contentDescription = name,
+                            modifier = Modifier.size(28.dp).clip(RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(name, color = if (selected) WitcherAmberGold else WitcherMutedText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            if (voice == "GERALT") ChatTab(viewModel) else AdvisorTab(viewModel)
         }
     }
 }
@@ -330,16 +398,7 @@ fun JournalTab(
                 .padding(bottom = 8.dp)
         ) {
             // Witcher styled Journal Header
-            Text(
-                text = "Matt's Witcher guide".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherRedPrimary,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
+            PlaceTitle("Journal")
             Text(
                 text = "Manage your contracts, side pathways, and main destiny highlights.",
                 style = MaterialTheme.typography.bodySmall,
@@ -357,8 +416,8 @@ fun JournalTab(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val tabs = listOf(
-                    Pair("QUESTS", "📜 Quest Log"),
-                    Pair("DECISIONS", "⚖️ Destiny Branches")
+                    Pair("QUESTS", "Quest Log"),
+                    Pair("DECISIONS", "Destiny")
                 )
                 tabs.forEach { (tabId, label) ->
                     val isSelected = currentJournalSubTab == tabId
@@ -426,7 +485,7 @@ fun JournalTab(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "⚔️ Filters & Navigation",
+                    text = "Filters",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = WitcherAmberGold
@@ -676,10 +735,10 @@ fun JournalTab(
                 ) {
                     val levelRanges = listOf(
                         Pair("ALL", "All Levels"),
-                        Pair("1_5", "🟢 Novice (1-5)"),
-                        Pair("6_15", "⚔️ Journeyman (6-15)"),
-                        Pair("16_25", "🛡️ Master (16-25)"),
-                        Pair("26_UP", "💀 Legendary (26+)")
+                        Pair("1_5", "Novice (1-5)"),
+                        Pair("6_15", "Journeyman (6-15)"),
+                        Pair("16_25", "Master (16-25)"),
+                        Pair("26_UP", "Legendary (26+)")
                     )
                     levelRanges.forEach { (rangeVal, labelText) ->
                         FilterChipCustom(
@@ -1092,10 +1151,10 @@ fun QuestListItem(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val stampText = when (quest.type) {
-                        "MAIN" -> "⚔️ Main"
-                        "SIDE" -> "📜 Side"
-                        "CONTRACT" -> "🐺 Contract"
-                        "TREASURE" -> "💎 Hunt"
+                        "MAIN" -> "Main"
+                        "SIDE" -> "Side"
+                        "CONTRACT" -> "Contract"
+                        "TREASURE" -> "Hunt"
                         else -> "Quest"
                     }
                     Text(
@@ -1117,7 +1176,7 @@ fun QuestListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (quest.tracked) "📍 Tracked" else "○ Untracked",
+                        text = if (quest.tracked) "Tracked" else "Untracked",
                         fontSize = 10.sp,
                         fontWeight = if (quest.tracked) FontWeight.Bold else FontWeight.Normal,
                         color = if (quest.tracked) WitcherAmberGold else WitcherMutedText
@@ -1430,7 +1489,7 @@ fun QuestListItem(
 // BESTIARY TAB
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun BestiaryTab(viewModel: QuestViewModel) {
+fun BestiaryTab(viewModel: QuestViewModel, section: String = "MONSTERS") {
     val search by viewModel.bestiarySearch.collectAsStateWithLifecycle()
     val category by viewModel.bestiaryCategory.collectAsStateWithLifecycle()
     val monsters by viewModel.monsters.collectAsStateWithLifecycle()
@@ -1440,7 +1499,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
     val alchemyRecipes by viewModel.alchemyRecipes.collectAsStateWithLifecycle()
     val saddlebagItems by viewModel.saddlebagItems.collectAsStateWithLifecycle()
 
-    var activeSubTab by remember { mutableStateOf("MONSTERS") } // "MONSTERS", "ALCHEMY"
+    var activeSubTab by remember { mutableStateOf(section) }
 
     val context: Any? = null
     var tts by remember { mutableStateOf<DesktopTts?>(null) }
@@ -1496,55 +1555,10 @@ fun BestiaryTab(viewModel: QuestViewModel) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Top Sub-Tab Switcher
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
-                .background(WitcherDarkSurface, RoundedCornerShape(8.dp))
-                .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp))
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            val subTabs = listOf(
-                Pair("MONSTERS", "🐺 Beasts & Monsters"),
-                Pair("ALCHEMY", "🧪 Alchemy Recipes")
-            )
-            subTabs.forEach { (tabId, label) ->
-                val isSelected = activeSubTab == tabId
-                Surface(
-                    color = if (isSelected) WitcherRedPrimary else Color.Transparent,
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable { activeSubTab = tabId }
-                ) {
-                    Text(
-                        text = label,
-                        color = if (isSelected) WitcherDarkBackground else WitcherWhiteText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-            }
-        }
-
         if (activeSubTab == "MONSTERS") {
+            PlaceTitle("Beasts")
             Text(
-                text = "Witcher Bestiary".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherRedPrimary,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-            Text(
-                text = "Consult vulnerabilities, potion remedies, and combat formulas before engaging target monsters.",
+                    text = "Consult vulnerabilities and combat notes before engaging a monster.",
                 style = MaterialTheme.typography.bodySmall,
                 color = WitcherMutedText,
                 modifier = Modifier.padding(bottom = 12.dp)
@@ -1616,17 +1630,7 @@ fun BestiaryTab(viewModel: QuestViewModel) {
                 }
             }
         } else {
-            // ALCHEMY TAB ACTIVE
-            Text(
-                text = "Alchemy Formulas".uppercase(),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Serif,
-                    letterSpacing = 1.5.sp
-                ),
-                color = WitcherAmberGold,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+            PlaceTitle("Alchemy")
             Text(
                 text = "Synthesize deadly oils, restorative potions, and toxicity-boosting decoctions using material assets.",
                 style = MaterialTheme.typography.bodySmall,
@@ -1738,7 +1742,20 @@ fun MonsterCardItem(
         colors = CardDefaults.cardColors(containerColor = WitcherDarkSurface),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Row(modifier = Modifier.padding(10.dp).height(IntrinsicSize.Min)) {
+            val beastImageRes = beastDrawable(monster.name)
+            if (beastImageRes != null) {
+                Image(
+                    painter = painterResource(beastImageRes),
+                    contentDescription = monster.name,
+                    modifier = Modifier
+                        .width(240.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             // Header: Name and Category badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1792,24 +1809,9 @@ fun MonsterCardItem(
                 modifier = Modifier.padding(bottom = 10.dp)
             )
 
-            // Dynamic Illustrations for special beasts
-            val beastImageRes = beastDrawable(monster.name)
-            if (beastImageRes != null) {
-                Image(
-                    painter = painterResource(beastImageRes),
-                    contentDescription = monster.name + " portrait sketch",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, WitcherBorderColor, RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.FillWidth
-                )
-            }
-
             // Weakness tags
             Text(
-                text = "⚔️ Vulnerabilities".uppercase(),
+                text = "Vulnerabilities".uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = WitcherAmberGold,
@@ -1835,7 +1837,7 @@ fun MonsterCardItem(
                             }
                     ) {
                         Text(
-                            text = "⚡ $weakness",
+                            text = weakness,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = WitcherAmberGold,
@@ -1847,7 +1849,7 @@ fun MonsterCardItem(
 
             // Prep Combat strategy guide
             Text(
-                text = "🛡️ Tactician's Council".uppercase(),
+                text = "How to fight".uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = WitcherWhiteText,
@@ -1871,12 +1873,13 @@ fun MonsterCardItem(
                     .heightIn(min = 48.dp) // Touch target minimum 48dp
             ) {
                 Text(
-                    text = "👴 Consult Elder Vesemir".uppercase(),
+                    text = "Consult Vesemir".uppercase(),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = WitcherWhiteText,
                     letterSpacing = 1.sp
                 )
+            }
             }
         }
     }
@@ -1907,15 +1910,15 @@ fun AlchemyRecipeCardItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(alchemyCategoryImage(recipe.category)),
+                        contentDescription = recipe.category,
                         modifier = Modifier
                             .size(36.dp)
-                            .background(WitcherDarkSurfaceVariant, RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, WitcherAmberGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = recipe.icon, fontSize = 20.sp)
-                    }
+                        contentScale = ContentScale.Crop
+                    )
                     Text(
                         text = recipe.name,
                         fontSize = 16.sp,
@@ -2658,9 +2661,9 @@ fun AdvisorTab(viewModel: QuestViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val advisors = listOf(
-                    Triple("Vesemir", "👴 Vesemir", "Old Master"),
-                    Triple("Yennefer", "🔮 Yennefer", "Sorceress"),
-                    Triple("Jaskier", "🪕 Jaskier", "Glam Bard")
+                    Triple("Vesemir", "Vesemir", "Old Master"),
+                    Triple("Yennefer", "Yennefer", "Sorceress"),
+                    Triple("Jaskier", "Jaskier", "Glam Bard")
                 )
                 
                 advisors.forEach { (id, label, subtitle) ->
@@ -5365,7 +5368,7 @@ fun EquipmentReforgeCard(viewModel: QuestViewModel) {
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "🔨 Equipment Reforge".uppercase(),
+                text = "Equipment Reforge".uppercase(),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = WitcherAmberGold,
@@ -5480,7 +5483,7 @@ fun WitcherAbilityTree(
             ) {
                 Column {
                     Text(
-                        text = "⚔️ Abilities & Skills".uppercase(),
+                        text = "Abilities and Skills".uppercase(),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = WitcherAmberGold,
@@ -5519,10 +5522,10 @@ fun WitcherAbilityTree(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val categories = listOf(
-                    Triple("COMBAT", "⚔️ Combat", WitcherRedPrimary),
-                    Triple("SIGNS", "✨ Signs", Color(0xFF3498DB)),
-                    Triple("ALCHEMY", "🧪 Alchemy", Color(0xFF2ECC71)),
-                    Triple("GENERAL", "⭐ General", WitcherAmberGold)
+                    Triple("COMBAT", "Combat", WitcherRedPrimary),
+                    Triple("SIGNS", "Signs", Color(0xFF3498DB)),
+                    Triple("ALCHEMY", "Alchemy", Color(0xFF2ECC71)),
+                    Triple("GENERAL", "General", WitcherAmberGold)
                 )
 
                 categories.forEach { (catId, label, catColor) ->
