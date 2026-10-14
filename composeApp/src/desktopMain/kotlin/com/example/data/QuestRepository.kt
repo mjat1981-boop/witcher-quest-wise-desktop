@@ -23,7 +23,20 @@ class QuestRepository(
                 questDao.insertQuests(missingQuests)
             }
         }
+        // Keep seeded regions, so Hearts of Stone moves to Oxenfurt without touching status.
+        for (quest in preloaded) {
+            questDao.updateQuestRegionByTitle(quest.title, quest.region)
+        }
         
+        val catSchoolDiagram = SaddlebagItem(
+            name = "Cat School Steel Sword Diagram",
+            category = "DIAGRAM",
+            quantity = 1,
+            description = "A master diagram from the Cat School. Owning it unlocks the Cat appearance when Yoana or Hattori reforge a piece.",
+            rarity = "MAGIC",
+            iconLabel = "📜"
+        )
+
         // Populate default saddlebag item loadout if empty
         if (saddlebagItemDao.getItemsCount() == 0) {
             val defaultItems = listOf(
@@ -90,9 +103,12 @@ class QuestRepository(
                     description = "Glows with raw primal force. When slotted in the character skill tree, boosts physical sword damage.",
                     rarity = "RELIC",
                     iconLabel = "🩸"
-                )
+                ),
+                catSchoolDiagram
             )
             saddlebagItemDao.insertItems(defaultItems)
+        } else if (catSchoolDiagram.name !in saddlebagItemDao.getItemNames()) {
+            saddlebagItemDao.insertItem(catSchoolDiagram)
         }
     }
 
@@ -122,6 +138,10 @@ class QuestRepository(
 
     suspend fun updateStatus(id: Int, status: String) {
         questDao.updateQuestStatus(id, status)
+    }
+
+    suspend fun updateTracked(id: Int, tracked: Boolean) {
+        questDao.updateQuestTracked(id, tracked)
     }
 
     suspend fun updateNotes(id: Int, notes: String) {

@@ -9,6 +9,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -56,13 +58,16 @@ class AppDatabaseDaoTest {
         dao.updateQuestStatus(one.id, "COMPLETED")
         dao.updateQuestNotes(one.id, "wind's howling")
         dao.updateNarrativeChoices(one.id, "spared the ghoul")
+        dao.updateQuestTracked(one.id, true)
 
         val after = dao.getAllQuests().first().associateBy { it.id }
         assertEquals("COMPLETED", after.getValue(one.id).status)
         assertEquals("wind's howling", after.getValue(one.id).notes)
         assertEquals("spared the ghoul", after.getValue(one.id).narrativeChoices)
+        assertEquals(true, after.getValue(one.id).tracked)
         assertEquals("NOT_STARTED", after.getValue(two.id).status)
         assertEquals("", after.getValue(two.id).notes)
+        assertEquals(false, after.getValue(two.id).tracked)
     }
 
     @Test
@@ -141,5 +146,37 @@ class AppDatabaseDaoTest {
         repo.initializeDefaultQuests()
         assertEquals(preloadedCount, db.questDao().getQuestCount())
         assertTrue(db.questDao().getAllQuestTitlesSnapshot().contains(victim.title))
+    }
+
+    @Test
+    fun everyPaintedRegionHasQuestsAndHeartsOfStoneIsOxenfurt() {
+        val quests = AppDatabase.getPreloadedQuests()
+        val painted = listOf(
+            "WHITE_ORCHARD", "VELEN", "NOVIGRAD", "SKELLIGE",
+            "KAER_MORHEN", "TOUSSAINT", "HEART_OF_STONE"
+        )
+        for (region in painted) {
+            assertTrue(quests.any { it.region == region }, region)
+        }
+        assertEquals(
+            "HEART_OF_STONE",
+            quests.first { it.title == "Evil's Soft First Touches" }.region
+        )
+    }
+
+    @Test
+    fun choiceQuestHasDialogueAndPlainTreasureDoesNot() {
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Family Matters"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Whatsoever a Man Soweth..."))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("For the Advancement of Learning"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("Final Preparations"))
+        assertNotNull(QuestDecisionTree.getTreeForQuest("The Child of the Elder Blood"))
+        val battlefield = QuestDecisionTree.getTreeForQuest("Blood on the Battlefield")
+        assertNotNull(battlefield)
+        val lines = battlefield.paths.joinToString(" ") { it.choiceName }
+        assertTrue(lines.contains("lift your spirits"))
+        assertTrue(lines.contains("don't have to be good at everything"))
+        assertTrue(!lines.contains("laboratory") && !lines.contains("Go for it"))
+        assertNull(QuestDecisionTree.getTreeForQuest("Dirty Funds"))
     }
 }

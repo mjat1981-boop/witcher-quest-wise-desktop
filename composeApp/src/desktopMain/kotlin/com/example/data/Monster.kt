@@ -115,6 +115,76 @@ data class Monster(
                     description = "Vicious subterranean pack hunters that overwhelm targets with sheer numbers, communicating through chilling cackles.",
                     weaknesses = listOf("Northern Wind Bomb", "Necrophage Oil", "Igni (Sign)"),
                     combatGuide = "Nekkers always attack in large numbers and can surround you in seconds. Cast Igni or throw a Northern Wind bomb to freeze or panic them, then destroy them individually."
+                ),
+                Monster(
+                    name = "Grave Hag",
+                    category = "NECROPHAGE",
+                    description = "A hunched corpse-eater that haunts village cemeteries and battlefields, vomiting bile when cornered.",
+                    weaknesses = listOf("Necrophage Oil", "Igni (Sign)", "Grapeshot Bomb"),
+                    combatGuide = "Stay out of the bile pool. Burn her with Igni, then close with fast silver strikes before she can spit again."
+                ),
+                Monster(
+                    name = "Cockatrice",
+                    category = "DRACONID",
+                    description = "A winged reptile with a rooster's crest and a venomous beak. It swoops from cliffs and spits acid.",
+                    weaknesses = listOf("Golden Oriole Potion", "Draconid Oil", "Aard (Sign)", "Crossbow"),
+                    combatGuide = "Drink Golden Oriole so the spit does not poison you. Knock it out of the air with Aard or a bolt, then strike the grounded body."
+                ),
+                Monster(
+                    name = "Water Hag",
+                    category = "NECROPHAGE",
+                    description = "A bloated swamp hag that drags prey under the water and heals while standing in her pool.",
+                    weaknesses = listOf("Necrophage Oil", "Igni (Sign)", "Grapeshot Bomb"),
+                    combatGuide = "Lure her out of the water. Igni stops her regeneration. Do not let her drag you into the pool."
+                ),
+                Monster(
+                    name = "Noonshade Forktail",
+                    category = "DRACONID",
+                    description = "A cliff-nesting forktail whose tail spines and diving attacks make open ground lethal.",
+                    weaknesses = listOf("Golden Oriole Potion", "Draconid Oil", "Aard (Sign)", "Crossbow"),
+                    combatGuide = "Golden Oriole for the venom. Pull it down with a crossbow bolt, roll past the tail, and cut the wing joints."
+                ),
+                Monster(
+                    name = "Higher Vampire",
+                    category = "VAMPIRE",
+                    description = "An intelligent vampire who can pass for a man, turn to mist, and heal from wounds that would kill a lesser breed.",
+                    weaknesses = listOf("Black Blood Potion", "Vampire Oil", "Yrden (Sign)", "Moon Dust Bomb"),
+                    combatGuide = "Drink Black Blood before the conversation turns. Moon Dust stops the mist form. Yrden holds them still for silver strikes."
+                ),
+                Monster(
+                    name = "Toad Prince",
+                    category = "CURSED",
+                    description = "A cursed prince swollen into a giant toad in the Oxenfurt sewers. His tongue and poison spit fill the chamber.",
+                    weaknesses = listOf("Cursed Oil", "Golden Oriole Potion", "Igni (Sign)"),
+                    combatGuide = "Golden Oriole against the spit. Burn the tongue when it lashes, then hit the open mouth. Do not stand in the poison pools."
+                ),
+                Monster(
+                    name = "Bruxa",
+                    category = "VAMPIRE",
+                    description = "A screaming vampire who blinds her prey and closes the distance in a blur of claws.",
+                    weaknesses = listOf("Black Blood Potion", "Vampire Oil", "Moon Dust Bomb", "Yrden (Sign)"),
+                    combatGuide = "Black Blood punishes her bite. Moon Dust keeps her from vanishing. Yrden slows the rush so a silver riposte can land."
+                ),
+                Monster(
+                    name = "Archespore",
+                    category = "CURSED",
+                    description = "A walking blossom that roots itself and spits acid pods. Cut one down and the bulb may bloom again.",
+                    weaknesses = listOf("Cursed Oil", "Igni (Sign)", "Northern Wind Bomb"),
+                    combatGuide = "Burn the pods before they burst. Igni on the blossom, then destroy the bulb so it cannot regrow."
+                ),
+                Monster(
+                    name = "Shaelmaar",
+                    category = "RELICT",
+                    description = "A cave-dwelling beast plated in stone. It curls into a ball and rolls until something stops it.",
+                    weaknesses = listOf("Relict Oil", "Aard (Sign)", "Samum Bomb"),
+                    combatGuide = "Let it roll into a wall, or blast it with Aard so it flips. The soft belly is only open for a moment. Strike then."
+                ),
+                Monster(
+                    name = "Succubus",
+                    category = "HYBRID",
+                    description = "A winged seductress who would rather talk than fight. Steel and silver both find her if the talk fails.",
+                    weaknesses = listOf("Hybrid Oil", "Black Blood Potion", "Dimeritium Bomb"),
+                    combatGuide = "A dimeritium bomb breaks her glamour. If you must fight, Hybrid Oil and short dodges beat chasing her across the chapel."
                 )
             )
         }

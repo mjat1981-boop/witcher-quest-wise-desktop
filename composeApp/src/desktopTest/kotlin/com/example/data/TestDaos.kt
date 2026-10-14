@@ -42,6 +42,9 @@ internal class InMemoryQuestDao(
     override suspend fun updateQuestStatus(id: Int, status: String) =
         state.update { l -> l.map { if (it.id == id) it.copy(status = status) else it } }
 
+    override suspend fun updateQuestTracked(id: Int, tracked: Boolean) =
+        state.update { l -> l.map { if (it.id == id) it.copy(tracked = tracked) else it } }
+
     override suspend fun updateQuestNotes(id: Int, notes: String) =
         state.update { l -> l.map { if (it.id == id) it.copy(notes = notes) else it } }
 
@@ -54,6 +57,9 @@ internal class InMemoryQuestDao(
     override suspend fun getQuestCount(): Int = state.value.size
 
     override suspend fun getAllQuestTitlesSnapshot(): List<String> = state.value.map { it.title }
+
+    override suspend fun updateQuestRegionByTitle(title: String, region: String) =
+        state.update { l -> l.map { if (it.title == title) it.copy(region = region) else it } }
 }
 
 internal class InMemorySaddlebagDao(
@@ -71,6 +77,8 @@ internal class InMemorySaddlebagDao(
     override fun getAllSaddlebagItems(): Flow<List<SaddlebagItem>> = state
 
     override suspend fun getItemsCount(): Int = state.value.size
+
+    override suspend fun getItemNames(): List<String> = state.value.map { it.name }
 
     override suspend fun insertItem(item: SaddlebagItem) = state.update { it + withId(item) }
 

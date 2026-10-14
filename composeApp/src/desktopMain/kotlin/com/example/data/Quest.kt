@@ -20,5 +20,6 @@ data class Quest(
     val isCustom: Boolean = false,
     val geraltAdvice: String? = null,
     val advisorAdvice: String? = null,
-    val narrativeChoices: String = ""
+    val narrativeChoices: String = "",
+    val tracked: Boolean = false
 )

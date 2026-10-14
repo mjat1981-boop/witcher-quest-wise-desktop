@@ -27,15 +27,33 @@ data class WitcherSkill(
     val category: String, // "COMBAT", "SIGNS", "ALCHEMY", "GENERAL"
     val description: String,
     val maxLevel: Int,
-    val level: Int = 0
+    val level: Int = 0,
+    /** Skills that must be at least rank 1 before this one can be raised. */
+    val prerequisiteIds: List<String> = emptyList()
+)
+
+data class ReforgeSlot(
+    val id: String,
+    val label: String,
+    val statName: String,
+    val appearance: String,
+    val dye: String? = null
+)
+
+data class SchoolLook(
+    val id: String,
+    val name: String
 )
 
 class QuestViewModel(private val repository: QuestRepository, private val monsterRepository: MonsterRepository
 ) : ViewModel() {
 
     // Main UI Tabs
-    private val _currentTab = MutableStateFlow("JOURNAL") // "JOURNAL", "BESTIARY", "ADVISOR", "PROFILE"
+    private val _currentTab = MutableStateFlow("JOURNAL") // JOURNAL, BEASTS, ALCHEMY, GWENT, GEAR, COUNSEL
     val currentTab: StateFlow<String> = _currentTab.asStateFlow()
+
+    private val _counselVoice = MutableStateFlow("GERALT") // GERALT or ADVISOR
+    val counselVoice: StateFlow<String> = _counselVoice.asStateFlow()
 
     // Quests Live Data
     val quests: StateFlow<List<Quest>> = repository.allQuests
@@ -156,12 +174,12 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
             }
         }
 
-        // Apply Sorting
+        // Tracked quests lead, then the selected level/title order.
         list = when (sort) {
-            "LEVEL_ASC" -> list.sortedBy { it.recommendedLevel }
-            "LEVEL_DESC" -> list.sortedByDescending { it.recommendedLevel }
-            "TITLE_ASC" -> list.sortedBy { it.title }
-            else -> list
+            "LEVEL_ASC" -> list.sortedWith(compareByDescending<Quest> { it.tracked }.thenBy { it.recommendedLevel })
+            "LEVEL_DESC" -> list.sortedWith(compareByDescending<Quest> { it.tracked }.thenByDescending { it.recommendedLevel })
+            "TITLE_ASC" -> list.sortedWith(compareByDescending<Quest> { it.tracked }.thenBy { it.title })
+            else -> list.sortedByDescending { it.tracked }
         }
 
         list
@@ -185,180 +203,13 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
     private val _witcherSchool = MutableStateFlow("Wolf") // "Wolf", "Griffin", "Cat", "Bear", "Viper", "Manticore"
     val witcherSchool = _witcherSchool.asStateFlow()
 
-    // Witcher Next-Gen Abilities/Skills (Combat, Signs, Alchemy = Max 3. General = Max 1)
-    private val _witcherSkills = MutableStateFlow<List<WitcherSkill>>(
-        listOf(
-            WitcherSkill(
-                id = "muscle_memory",
-                name = "Muscle Memory",
-                category = "COMBAT",
-                description = "Fast attack damage increased: +10% / +20% / +30%. Adrenaline Point gain bonus: +2% / +4% / +6%.",
-                maxLevel = 3,
-                level = 1
-            ),
-            WitcherSkill(
-                id = "strength_training",
-                name = "Strength Training",
-                category = "COMBAT",
-                description = "Strong attack damage increased: +10% / +20% / +30%. Adrenaline Point gain bonus: +2% / +4% / +6%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "fleet_footed",
-                name = "Fleet Footed",
-                category = "COMBAT",
-                description = "Defensive dodging reducing incoming damage by: 40% / 70% / 100%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "arrow_deflection",
-                name = "Arrow Deflection",
-                category = "COMBAT",
-                description = "Deflects arrows while parrying. Lvl 2: reflects arrow. Lvl 3: reflects & deals double damage.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "whirl",
-                name = "Whirl",
-                category = "COMBAT",
-                description = "Spinning attack that strikes all enemies in an active radius. Stamina and Adrenaline consumption reduced by 20% / 35% / 50%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "rend",
-                name = "Rend",
-                category = "COMBAT",
-                description = "Deals a devastating heavy blow that ignores enemy defense. Critical hit chance increased by 25% / 50% / 75%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "melt_armor",
-                name = "Melt Armor",
-                category = "SIGNS",
-                description = "Igni sign permanently reduces enemy armor value by: 10% / 20% / 30% (scales with Sign intensity).",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "exploding_shield",
-                name = "Exploding Shield",
-                category = "SIGNS",
-                description = "Quen shield knocks back enemies on breaking. Lvl 2/3: adds chance to damage & knock down.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "delusion",
-                name = "Delusion",
-                category = "SIGNS",
-                description = "Axii sign dialogue persuasion unlocked. Target does not advance. Casting time reduced: 20% / 40% / 60%.",
-                maxLevel = 3,
-                level = 1
-            ),
-            WitcherSkill(
-                id = "firestream",
-                name = "Firestream",
-                category = "SIGNS",
-                description = "Igni emits a continuous stream of fire. Sign intensity bonus: +5% / +15% / +25% active.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "active_shield",
-                name = "Active Shield",
-                category = "SIGNS",
-                description = "Creates an energy shield that absorbs damage and restores Vitality. Stamina drain reduced: 25% / 50% / 75%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "poisoned_blades",
-                name = "Poisoned Blades",
-                category = "ALCHEMY",
-                description = "Weapon oils grant a chance to poison target on hit dependent on oil tier: up to 10% / 15% / 25%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "heightened_tolerance",
-                name = "Heightened Tolerance",
-                category = "ALCHEMY",
-                description = "Increases chemical overdose toxicity safety threshold by: 30% / 50% / 80%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "refreshment",
-                name = "Refreshment",
-                category = "ALCHEMY",
-                description = "Drinking any potion instantly heals portion of maximum vitality: 10% / 20% / 30%.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "acquired_tolerance",
-                name = "Acquired Tolerance",
-                category = "ALCHEMY",
-                description = "Every known alchemical formula increases maximum Toxicity limit by 0.5 / 1 / 1.5 points.",
-                maxLevel = 3,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "cat_school",
-                name = "Cat School Techniques",
-                category = "GENERAL",
-                description = "Each light armor item increases fast attack damage by 5% and critical hit damage by 25%.",
-                maxLevel = 1,
-                level = 1
-            ),
-            WitcherSkill(
-                id = "griffin_school",
-                name = "Griffin School Techniques",
-                category = "GENERAL",
-                description = "Each medium armor item increases sign intensity by 5% and stamina regeneration by 5%.",
-                maxLevel = 1,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "bear_school",
-                name = "Bear School Techniques",
-                category = "GENERAL",
-                description = "Each heavy armor item increases maximum vitality by 5% and strong attack damage by 5%.",
-                maxLevel = 1,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "sun_stars",
-                name = "Sun and Stars",
-                category = "GENERAL",
-                description = "Daytime regenerates 10 Vitality/s out of combat. Night regenerates 1 Stamina/s in combat.",
-                maxLevel = 1,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "gourmet",
-                name = "Gourmet",
-                category = "GENERAL",
-                description = "Eating food regenerates Vitality for a duration of 20 minutes instead of the standard 5-10 seconds.",
-                maxLevel = 1,
-                level = 0
-            ),
-            WitcherSkill(
-                id = "survival_instinct",
-                name = "Survival Instinct",
-                category = "GENERAL",
-                description = "Increases maximum Vitality by 500 health points permanently.",
-                maxLevel = 1,
-                level = 0
-            )
-        )
-    )
+    // Remastered skill tree: every skill has three ranks and starts unallocated.
+    // Later skills require a named prerequisite at rank 1, not a branch point total.
+    private val _witcherSkills = MutableStateFlow(remasteredSkillTree())
     val witcherSkills = _witcherSkills.asStateFlow()
+
+    private val _gearSlots = MutableStateFlow(defaultGearSlots())
+    val gearSlots = _gearSlots.asStateFlow()
 
 
     // Chat State for AI Advisor
@@ -397,9 +248,14 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         _currentTab.value = tab
     }
 
+    fun setCounselVoice(voice: String) {
+        _counselVoice.value = voice
+    }
+
     fun askVesemirAboutMonster(monsterName: String) {
         setAdvisor("Vesemir")
-        setTab("ADVISOR")
+        setCounselVoice("ADVISOR")
+        setTab("COUNSEL")
         sendAdvisorMessage("Tell me how to fight a $monsterName. What are its exact vulnerabilities, and how should I prepare for such a contract?")
     }
 
@@ -437,6 +293,19 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         _selectedQuest.value = quest
         _questAdvice.value = null
         _isFetchAdviceLoading.value = false
+    }
+
+    fun toggleQuestTracked(id: Int) {
+        viewModelScope.launch {
+            val current = quests.value.find { it.id == id } ?: return@launch
+            val tracked = !current.tracked
+            repository.updateTracked(id, tracked)
+            _selectedQuest.value?.let { selected ->
+                if (selected.id == id) {
+                    _selectedQuest.value = selected.copy(tracked = tracked)
+                }
+            }
+        }
     }
 
     fun updateQuestStatus(id: Int, status: String) {
@@ -559,14 +428,17 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         val clearedSkills = currentSkills.map { it.copy(level = 0) }
 
         val allocations = when (schoolName) {
-            "Cat" -> mapOf("cat_school" to 1, "muscle_memory" to 3, "fleet_footed" to 3, "whirl" to 3)
-            "Griffin" -> mapOf("griffin_school" to 1, "melt_armor" to 3, "firestream" to 3, "active_shield" to 3)
-            "Bear" -> mapOf("bear_school" to 1, "strength_training" to 3, "rend" to 3, "heightened_tolerance" to 3)
-            "Wolf" -> mapOf("griffin_school" to 1, "muscle_memory" to 3, "melt_armor" to 3, "refreshment" to 3)
-            "Viper" -> mapOf("cat_school" to 1, "poisoned_blades" to 3, "heightened_tolerance" to 3, "muscle_memory" to 3)
-            "Manticore" -> mapOf("griffin_school" to 1, "heightened_tolerance" to 3, "refreshment" to 3, "acquired_tolerance" to 3)
-            else -> mapOf()
+            "Cat" -> mutableMapOf("cat_school" to 1, "muscle_memory" to 3, "fleet_footed" to 3, "whirl" to 3)
+            "Griffin" -> mutableMapOf("griffin_school" to 1, "melt_armor" to 3, "firestream" to 3, "active_shield" to 3)
+            "Bear" -> mutableMapOf("bear_school" to 1, "strength_training" to 3, "rend" to 3, "heightened_tolerance" to 3)
+            "Wolf" -> mutableMapOf("griffin_school" to 1, "muscle_memory" to 3, "melt_armor" to 3, "refreshment" to 3)
+            "Viper" -> mutableMapOf("cat_school" to 1, "poisoned_blades" to 3, "heightened_tolerance" to 3, "muscle_memory" to 3)
+            "Manticore" -> mutableMapOf("griffin_school" to 1, "heightened_tolerance" to 3, "refreshment" to 3, "acquired_tolerance" to 3)
+            else -> mutableMapOf()
         }
+        // The published kits stay the same. Raise any missing prerequisite to rank 1
+        // so Griffin (Active Shield) and Wolf (Refreshment) still fit the tree.
+        fillPrerequisiteRanks(allocations, currentSkills)
 
         val neededPoints = allocations.values.sum()
         val totalPoints = _witcherLevel.value + 5
@@ -585,19 +457,49 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         val skill = currentSkills.find { it.id == skillId } ?: return
         val currentLevel = skill.level
         val newLevel = currentLevel + delta
-        
-        if (newLevel in 0..skill.maxLevel) {
+
+        if (newLevel !in 0..skill.maxLevel) return
+
+        if (delta > 0) {
+            val missingPrerequisite = skill.prerequisiteIds.any { prereqId ->
+                val prerequisite = currentSkills.find { it.id == prereqId }
+                prerequisite == null || prerequisite.level < 1
+            }
+            if (missingPrerequisite) return
+
             val totalSpent = currentSkills.sumOf { it.level }
             val availablePool = _witcherLevel.value + 5
-            
-            if (delta > 0 && totalSpent >= availablePool) {
-                return // No more available points to allocate
-            }
-            
-            _witcherSkills.value = currentSkills.map {
-                if (it.id == skillId) it.copy(level = newLevel) else it
-            }
+            if (totalSpent >= availablePool) return
         }
+
+        if (delta < 0 && newLevel == 0) {
+            val dependentStillAllocated = currentSkills.any { other ->
+                other.level > 0 && skillId in other.prerequisiteIds
+            }
+            if (dependentStillAllocated) return
+        }
+
+        _witcherSkills.value = currentSkills.map {
+            if (it.id == skillId) it.copy(level = newLevel) else it
+        }
+    }
+
+    /**
+     * Change a slot's appearance without touching its stats or dye.
+     * Only Yoana and Hattori offer the service, and the look must already be
+     * unlocked by a matching diagram or gear piece in the saddlebag.
+     * Returns false when the reforge is refused.
+     */
+    fun reforgeEquipment(slotId: String, lookId: String, craftsman: String): Boolean {
+        if (craftsman != "Yoana" && craftsman != "Hattori") return false
+        val look = defaultSchoolLooks().find { it.id == lookId } ?: return false
+        if (look.id !in unlockedSchoolIds(saddlebagItems.value)) return false
+        if (_gearSlots.value.none { it.id == slotId }) return false
+
+        _gearSlots.value = _gearSlots.value.map { slot ->
+            if (slot.id == slotId) slot.copy(appearance = look.name) else slot
+        }
+        return true
     }
 
 
@@ -672,8 +574,8 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
     }
 
     fun askAIAboutQuestDirectly(quest: Quest, destinationTab: String) {
-        // Set the active tab
-        _currentTab.value = destinationTab
+        setCounselVoice(if (destinationTab == "CHAT") "GERALT" else "ADVISOR")
+        _currentTab.value = "COUNSEL"
         
         // Prepare query
         val userQuery = "I have a contract/quest called '${quest.title}' (Recommended Level: ${quest.recommendedLevel}) situated in ${quest.region.replace("_", " ")}. Tell me exactly what is involved, what level is recommended, and what monster oils, potions, and signs I should prepare."
@@ -996,3 +898,207 @@ class QuestViewModel(private val repository: QuestRepository, private val monste
         }
     }
 }
+
+private fun fillPrerequisiteRanks(
+    allocations: MutableMap<String, Int>,
+    skills: List<WitcherSkill>
+) {
+    val byId = skills.associateBy { it.id }
+    val pending = ArrayDeque(allocations.keys)
+    while (pending.isNotEmpty()) {
+        val skill = byId[pending.removeFirst()] ?: continue
+        for (prereqId in skill.prerequisiteIds) {
+            if ((allocations[prereqId] ?: 0) < 1) {
+                allocations[prereqId] = 1
+                pending.add(prereqId)
+            }
+        }
+    }
+}
+
+private fun remasteredSkillTree(): List<WitcherSkill> = listOf(
+    WitcherSkill(
+        id = "muscle_memory",
+        name = "Muscle Memory",
+        category = "COMBAT",
+        description = "Fast attack damage increased: +10% / +20% / +30%. Adrenaline Point gain bonus: +2% / +4% / +6%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "strength_training",
+        name = "Strength Training",
+        category = "COMBAT",
+        description = "Strong attack damage increased: +10% / +20% / +30%. Adrenaline Point gain bonus: +2% / +4% / +6%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "fleet_footed",
+        name = "Fleet Footed",
+        category = "COMBAT",
+        description = "Defensive dodging reducing incoming damage by: 40% / 70% / 100%.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("muscle_memory")
+    ),
+    WitcherSkill(
+        id = "arrow_deflection",
+        name = "Arrow Deflection",
+        category = "COMBAT",
+        description = "Deflects arrows while parrying. Lvl 2: reflects arrow. Lvl 3: reflects & deals double damage.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("fleet_footed")
+    ),
+    WitcherSkill(
+        id = "whirl",
+        name = "Whirl",
+        category = "COMBAT",
+        description = "Spinning attack that strikes all enemies in an active radius. Stamina and Adrenaline consumption reduced by 20% / 35% / 50%.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("muscle_memory")
+    ),
+    WitcherSkill(
+        id = "rend",
+        name = "Rend",
+        category = "COMBAT",
+        description = "Deals a devastating heavy blow that ignores enemy defense. Critical hit chance increased by 25% / 50% / 75%.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("strength_training")
+    ),
+    WitcherSkill(
+        id = "melt_armor",
+        name = "Melt Armor",
+        category = "SIGNS",
+        description = "Igni sign permanently reduces enemy armor value by: 10% / 20% / 30% (scales with Sign intensity).",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "exploding_shield",
+        name = "Exploding Shield",
+        category = "SIGNS",
+        description = "Quen shield knocks back enemies on breaking. Lvl 2/3: adds chance to damage & knock down.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "delusion",
+        name = "Delusion",
+        category = "SIGNS",
+        description = "Axii sign dialogue persuasion unlocked. Target does not advance. Casting time reduced: 20% / 40% / 60%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "firestream",
+        name = "Firestream",
+        category = "SIGNS",
+        description = "Igni emits a continuous stream of fire. Sign intensity bonus: +5% / +15% / +25% active.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("melt_armor")
+    ),
+    WitcherSkill(
+        id = "active_shield",
+        name = "Active Shield",
+        category = "SIGNS",
+        description = "Creates an energy shield that absorbs damage and restores Vitality. Stamina drain reduced: 25% / 50% / 75%.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("exploding_shield")
+    ),
+    WitcherSkill(
+        id = "poisoned_blades",
+        name = "Poisoned Blades",
+        category = "ALCHEMY",
+        description = "Weapon oils grant a chance to poison target on hit dependent on oil tier: up to 10% / 15% / 25%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "heightened_tolerance",
+        name = "Heightened Tolerance",
+        category = "ALCHEMY",
+        description = "Increases chemical overdose toxicity safety threshold by: 30% / 50% / 80%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "acquired_tolerance",
+        name = "Acquired Tolerance",
+        category = "ALCHEMY",
+        description = "Every known alchemical formula increases maximum Toxicity limit by 0.5 / 1 / 1.5 points.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("heightened_tolerance")
+    ),
+    WitcherSkill(
+        id = "refreshment",
+        name = "Refreshment",
+        category = "ALCHEMY",
+        description = "Drinking any potion instantly heals portion of maximum vitality: 10% / 20% / 30%.",
+        maxLevel = 3,
+        prerequisiteIds = listOf("acquired_tolerance")
+    ),
+    WitcherSkill(
+        id = "cat_school",
+        name = "Cat School Techniques",
+        category = "GENERAL",
+        description = "Each light armor item increases fast attack damage by 5% / 10% / 15% and critical hit damage by 25% / 50% / 75%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "griffin_school",
+        name = "Griffin School Techniques",
+        category = "GENERAL",
+        description = "Each medium armor item increases sign intensity by 5% / 10% / 15% and stamina regeneration by 5% / 10% / 15%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "bear_school",
+        name = "Bear School Techniques",
+        category = "GENERAL",
+        description = "Each heavy armor item increases maximum vitality by 5% / 10% / 15% and strong attack damage by 5% / 10% / 15%.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "gourmet",
+        name = "Gourmet",
+        category = "GENERAL",
+        description = "Eating food regenerates Vitality for 20 minutes. Higher ranks extend the heal to 30 / 40 minutes.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "sun_stars",
+        name = "Sun and Stars",
+        category = "GENERAL",
+        description = "Daytime regenerates Vitality out of combat. Night regenerates Stamina in combat. Ranks raise the rate.",
+        maxLevel = 3
+    ),
+    WitcherSkill(
+        id = "survival_instinct",
+        name = "Survival Instinct",
+        category = "GENERAL",
+        description = "Increases maximum Vitality by 500 / 1000 / 1500 health points.",
+        maxLevel = 3
+    )
+)
+
+private fun defaultGearSlots(): List<ReforgeSlot> = listOf(
+    ReforgeSlot("steel_sword", "Steel sword", "Mastercrafted Wolven Steel Sword", "Wolven"),
+    ReforgeSlot("silver_sword", "Silver sword", "Mastercrafted Wolven Silver Sword", "Wolven"),
+    ReforgeSlot("armor", "Armor", "Mastercrafted Wolven Armor", "Wolven", dye = "Toussaint Burgundy"),
+    ReforgeSlot("gloves", "Gloves", "Mastercrafted Wolven Gauntlets", "Wolven"),
+    ReforgeSlot("trousers", "Trousers", "Mastercrafted Wolven Trousers", "Wolven"),
+    ReforgeSlot("boots", "Boots", "Mastercrafted Wolven Boots", "Wolven")
+)
+
+fun schoolLookCatalog(): List<SchoolLook> = defaultSchoolLooks()
+
+/** A look unlocks when the saddlebag holds gear or a diagram whose name contains the school. */
+fun unlockedSchoolIds(items: List<SaddlebagItem>): Set<String> {
+    return defaultSchoolLooks().filter { look ->
+        items.any { item ->
+            val gearOrDiagram = item.category.equals("GEAR", ignoreCase = true) ||
+                item.category.equals("DIAGRAM", ignoreCase = true)
+            gearOrDiagram && item.name.contains(look.name, ignoreCase = true)
+        }
+    }.map { it.id }.toSet()
+}
+
+private fun defaultSchoolLooks(): List<SchoolLook> = listOf(
+    SchoolLook("wolf", "Wolf"),
+    SchoolLook("griffin", "Griffin"),
+    SchoolLook("cat", "Cat"),
+    SchoolLook("bear", "Bear")
+)
